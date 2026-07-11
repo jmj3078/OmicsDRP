@@ -36,9 +36,11 @@ def build_adamw_optimizer(model, lr, weight_decay):
          {"params": no_decay, "weight_decay": 0.0}], lr=lr)
 
 
-def _move_batch(sample_features, drug_idx, labels, device):
-    sample_features = {k: v.to(device) for k, v in sample_features.items()}
-    return sample_features, drug_idx.to(device), labels.to(device)
+def _move_batch(gene_features, drug_idx, labels, device):
+    # gene_features is a single [B, n_gene, n_omics] tensor (non_blocking for pinned)
+    return (gene_features.to(device, non_blocking=True),
+            drug_idx.to(device, non_blocking=True),
+            labels.to(device, non_blocking=True))
 
 
 def train_epoch(model, loader, criterion, optimizer, device) -> Tuple[float, Dict[str, float]]:

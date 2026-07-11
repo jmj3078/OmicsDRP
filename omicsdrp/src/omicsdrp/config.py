@@ -96,6 +96,7 @@ class ExperimentConfig:
 
     # --- optimisation ---
     batch_size: int = 128
+    num_workers: int = 4                     # DataLoader worker processes
     num_epochs: int = 100
     lr: float = 0.01
     weight_decay: float = 1e-4
@@ -113,10 +114,21 @@ class ExperimentConfig:
         return len(self.omics)
 
     def tag(self) -> str:
-        """Short, filesystem-safe, collision-resistant experiment tag."""
+        """Short, filesystem-safe experiment tag = the EXPERIMENT IDENTITY.
+
+        Deliberately independent of the cosmetic ``name`` (and ``out_root``): two
+        configs that differ only by their stage label map to the SAME tag, so a
+        shared model (e.g. the baseline that also appears as "feature=all",
+        "cell=attention", "drug=morgan") is trained exactly once and reused
+        everywhere via the resume/cache path -- no duplicate training.
+        """
         omics_tag = "+".join(o for o in OMICS_ORDER if o in self.omics)
-        base = f"{self.name}__{omics_tag}__{self.cell_encoder}__{self.drug_encoder}__{self.split_mode}"
-        h = hashlib.md5(json.dumps(asdict(self), sort_keys=True).encode()).hexdigest()[:6]
+        base = f"{omics_tag}__{self.cell_encoder}__{self.drug_encoder}__{self.split_mode}"
+        ident = {k: v for k, v in asdict(self).items() if k not in ("name", "out_root")}
+        # canonicalise omics so list ORDER doesn't change identity (["RNA","SNP"]
+        # and ["SNP","RNA"] are the same model -> same tag -> trained once).
+        ident["omics"] = self.omics_indices()
+        h = hashlib.md5(json.dumps(ident, sort_keys=True).encode()).hexdigest()[:6]
         return f"{base}__{h}"
 
     def to_dict(self) -> dict:

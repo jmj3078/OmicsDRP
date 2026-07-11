@@ -145,16 +145,26 @@ def scale_gene_data(gene_data: Dict[str, torch.Tensor],
     return scaled
 
 
-class OmicsDrugDataset(Dataset):
-    """Yields (sample_features_dict, drug_idx, ic50, (sample_idx, drug_idx)).
+def stack_gene_data(gene_data: Dict[str, torch.Tensor],
+                    genes: Sequence[str]) -> torch.Tensor:
+    """Stack the per-gene dict into a single ``[N_cell, n_gene, n_omics]`` tensor,
+    in ``genes`` order (must match the model's per-gene weight order).
 
-    Drug features are *not* materialised here -- the model's drug encoder gathers
-    them by ``drug_idx`` from its own precomputed table/graph list.
+    Done ONCE per fold so the Dataset can return a cheap slice instead of building
+    a 909-key dict per sample (the old data-loading bottleneck)."""
+    return torch.stack([gene_data[g] for g in genes], dim=1).contiguous()
+
+
+class OmicsDrugDataset(Dataset):
+    """Yields (gene_features[n_gene, n_omics], drug_idx, ic50, (sample_idx, drug_idx)).
+
+    Gene features are a slice of the pre-stacked cell tensor; drug features are
+    gathered by the model's drug encoder from ``drug_idx``.
     """
 
-    def __init__(self, gene_data: Dict[str, torch.Tensor], ic50: torch.Tensor,
+    def __init__(self, gene_tensor: torch.Tensor, ic50: torch.Tensor,
                  pairs: Sequence[Sequence[int]]):
-        self.gene_data = gene_data
+        self.gene_tensor = gene_tensor          # [N_cell, n_gene, n_omics]
         self.ic50 = ic50
         self.pairs = [(int(s), int(d)) for s, d in pairs]
 
@@ -163,6 +173,6 @@ class OmicsDrugDataset(Dataset):
 
     def __getitem__(self, idx: int):
         sample_idx, drug_idx = self.pairs[idx]
-        sample_features = {g: self.gene_data[g][sample_idx] for g in self.gene_data}
+        gene_features = self.gene_tensor[sample_idx]        # [n_gene, n_omics]
         ic50_value = self.ic50[sample_idx, drug_idx]
-        return sample_features, drug_idx, ic50_value, (sample_idx, drug_idx)
+        return gene_features, drug_idx, ic50_value, (sample_idx, drug_idx)

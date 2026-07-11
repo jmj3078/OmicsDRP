@@ -21,6 +21,7 @@ cd "$(dirname "$0")"                      # -> omicsdrp/scripts
 ENV_NAME="${ENV_NAME:-omicsdrp}"
 OUT_ROOT="${OUT_ROOT:-./Results}"
 DATASET="${DATASET:-../../data}"
+RUNNER="${RUNNER:-run_stage1.py}"   # staged pipeline by default; set run_ablations.py for the OFAT grid
 MAX_RETRIES="${MAX_RETRIES:-20}"
 LOCK="$OUT_ROOT/sweep.lock"
 PIDFILE="$OUT_ROOT/sweep.pid"
@@ -28,7 +29,7 @@ LOGDIR="$OUT_ROOT/sweep_logs"
 
 mkdir -p "$OUT_ROOT" "$LOGDIR"
 # export so the detached child inherits them
-export ENV_NAME OUT_ROOT DATASET MAX_RETRIES LOCK PIDFILE LOGDIR
+export ENV_NAME OUT_ROOT DATASET RUNNER MAX_RETRIES LOCK PIDFILE LOGDIR EMAIL_TO
 
 # --- single-instance lock (atomic mkdir) ---
 if ! mkdir "$LOCK" 2>/dev/null; then
@@ -56,7 +57,7 @@ run() {
     # picks up where it stopped. Stop on success (0) or after MAX_RETRIES.
     while true; do
         echo "--- attempt $attempt/$MAX_RETRIES @ $(date) ---"
-        python run_ablations.py --dataset_path "$DATASET" --out_root "$OUT_ROOT" "$@"
+        python "$RUNNER" --dataset_path "$DATASET" --out_root "$OUT_ROOT" "$@"
         local rc=$?
         if [ $rc -eq 0 ]; then
             echo "=== sweep COMPLETE @ $(date) ==="

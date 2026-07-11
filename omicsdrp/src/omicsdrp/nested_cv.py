@@ -32,7 +32,8 @@ def _free_gpu() -> None:
         torch.cuda.empty_cache()
 
 from .config import ExperimentConfig
-from .data import RawData, select_omics, scale_gene_data, OmicsDrugDataset
+from .data import (RawData, select_omics, scale_gene_data, stack_gene_data,
+                   OmicsDrugDataset)
 from .splits import FoldSpec, build_folds
 from .models import DRPModel, initialize_weights, count_parameters
 from .engine import (set_seed, build_adamw_optimizer, train_epoch, evaluate,
@@ -40,9 +41,13 @@ from .engine import (set_seed, build_adamw_optimizer, train_epoch, evaluate,
 from .recorder import ExperimentRecorder
 
 
-def _make_loader(gene_data, ic50, pair_idx, pairs, batch_size, shuffle):
-    ds = OmicsDrugDataset(gene_data, ic50, pairs[pair_idx])
-    return DataLoader(ds, batch_size=batch_size, shuffle=shuffle)
+def _make_loader(gene_tensor, ic50, pair_idx, pairs, batch_size, shuffle,
+                 drop_last=False, num_workers=4):
+    ds = OmicsDrugDataset(gene_tensor, ic50, pairs[pair_idx])
+    return DataLoader(
+        ds, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last,
+        num_workers=num_workers, pin_memory=torch.cuda.is_available(),
+        persistent_workers=num_workers > 0)
 
 
 def run_fold(raw: RawData, config: ExperimentConfig, fold: FoldSpec,
@@ -52,13 +57,20 @@ def run_fold(raw: RawData, config: ExperimentConfig, fold: FoldSpec,
     set_seed(config.seed + fold.fold)
     omics_gene = select_omics(raw.gene_data, config.omics_indices())
     gene_scaled = scale_gene_data(omics_gene, fold.train_sample_indices)
+    # stack the per-gene dict into one [N_cell, n_gene, n_omics] tensor ONCE, so the
+    # DataLoader returns a cheap slice (not a 909-key dict) per sample.
+    gene_tensor = stack_gene_data(gene_scaled, raw.genes)
 
-    train_loader = _make_loader(gene_scaled, raw.ic50, fold.train_pair_idx,
-                                raw.pairs, config.batch_size, shuffle=True)
-    val_loader = _make_loader(gene_scaled, raw.ic50, fold.val_pair_idx,
-                              raw.pairs, config.batch_size, shuffle=False)
-    test_loader = _make_loader(gene_scaled, raw.ic50, fold.test_pair_idx,
-                               raw.pairs, config.batch_size, shuffle=False)
+    nw = config.num_workers
+    # drop_last on TRAIN only: the drug-embedding & response-head BatchNorm1d still
+    # crash on a trailing batch of size 1; eval loaders use BN eval mode so are safe.
+    train_loader = _make_loader(gene_tensor, raw.ic50, fold.train_pair_idx,
+                                raw.pairs, config.batch_size, shuffle=True,
+                                drop_last=True, num_workers=nw)
+    val_loader = _make_loader(gene_tensor, raw.ic50, fold.val_pair_idx,
+                              raw.pairs, config.batch_size, shuffle=False, num_workers=nw)
+    test_loader = _make_loader(gene_tensor, raw.ic50, fold.test_pair_idx,
+                               raw.pairs, config.batch_size, shuffle=False, num_workers=nw)
 
     model = DRPModel(raw.genes, raw.drug_meta, config).to(device)
     model.apply(initialize_weights)

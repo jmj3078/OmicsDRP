@@ -6,8 +6,15 @@ to attribute a performance change to a single design choice. Groups:
   * ``omics``   -- omics-combination ablation (incl. the 2-modality baselines,
                    since single-omics collapses the cell branch).
   * ``encoder`` -- attention vs. plain MLP cell encoder.
-  * ``drug``    -- drug representation (morgan implemented; 2 language + 2 graph
-                   pretrained + classic GNN stubbed).
+  * ``drug``    -- drug representation. The default grid compares only the
+                   **frozen-representation** family (morgan baseline + the 4
+                   pretrained encoders): every one is "fixed representation ->
+                   trained projection head", an apples-to-apples comparison.
+                   The end-to-end GNNs (gin/gcn) are intentionally EXCLUDED --
+                   they train the drug encoder jointly, so "how much of the gap
+                   is representation vs. extra trainable capacity" is ill-defined
+                   as a fair ablation. (They remain implemented and can still be
+                   run manually via an explicit config.)
   * ``split``   -- mixed / unseen-cell / unseen-drug evaluation regimes.
 
 ``build_grid(groups=...)`` lets the runner pick which groups to execute so the
@@ -18,7 +25,25 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Dict, List
 
-from .config import ExperimentConfig, DRUG_ENCODERS
+from .config import ExperimentConfig, DRUG_ENCODERS, DRUG_ENCODER_FAMILY
+
+# Fair drug-representation ablation = frozen-representation encoders only
+# (baseline morgan + pretrained). GNNs are excluded (end-to-end, not comparable).
+ABLATION_DRUG_ENCODERS = [d for d in DRUG_ENCODERS
+                          if DRUG_ENCODER_FAMILY[d] != "scratch_graph"]
+
+# Feature ablation = RNA-anchored build-up. RNA (the transcriptomic backbone) is
+# always present so the cell branch never collapses to a single modality; we add
+# one, then two, then all other modalities to read off each one's marginal value.
+FEATURE_OMICS_SETS = [
+    ["RNA", "SNP"],                  # RNA + one
+    ["RNA", "MET"],
+    ["RNA", "CNV"],
+    ["RNA", "SNP", "MET"],           # RNA + two
+    ["RNA", "SNP", "CNV"],
+    ["RNA", "MET", "CNV"],
+    ["RNA", "SNP", "MET", "CNV"],    # all (== baseline reference)
+]
 
 
 def reference_config(**overrides) -> ExperimentConfig:
@@ -41,8 +66,7 @@ def build_grid(groups: List[str] = None, **base_overrides) -> List[ExperimentCon
     grid[ref.tag()] = replace(ref, name="ref")
 
     if "omics" in groups:
-        for omics in (["RNA", "MET"], ["RNA", "CNV"], ["RNA", "CNV", "MET"],
-                      ["SNP", "MET", "CNV", "RNA"]):
+        for omics in FEATURE_OMICS_SETS:
             c = replace(ref, name="omics", omics=omics)
             grid[c.tag()] = c
 
@@ -52,7 +76,7 @@ def build_grid(groups: List[str] = None, **base_overrides) -> List[ExperimentCon
             grid[c.tag()] = c
 
     if "drug" in groups:
-        for drug in DRUG_ENCODERS:            # morgan + 5 stubs
+        for drug in ABLATION_DRUG_ENCODERS:   # morgan + 4 pretrained (no GNNs)
             c = replace(ref, name="drug", drug_encoder=drug)
             grid[c.tag()] = c
 

@@ -21,7 +21,7 @@ cd "$(dirname "$0")"                      # -> omicsdrp/scripts
 ENV_NAME="${ENV_NAME:-omicsdrp}"
 OUT_ROOT="${OUT_ROOT:-./Results}"
 DATASET="${DATASET:-../../data}"
-RUNNER="${RUNNER:-run_stage1.py}"   # staged pipeline by default; set run_ablations.py for the OFAT grid
+RUNNER="${RUNNER:-runner.py}"   # staged pipeline by default; set run_ablations.py for the OFAT grid
 MAX_RETRIES="${MAX_RETRIES:-20}"
 LOCK="$OUT_ROOT/sweep.lock"
 PIDFILE="$OUT_ROOT/sweep.pid"

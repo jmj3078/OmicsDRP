@@ -50,6 +50,13 @@ python run_ablations.py --dataset_path ../../data --out_root ./Results
 python inspect_clusters.py --target both --k_min 2 --k_max 30 \
     --chosen_k_cell 6 --chosen_k_drug 8 --dataset_path ../../data
 
+# Deployable ENSEMBLE inference models (SEPARATE track from nested CV, own folder):
+python train_inference_models.py --dataset_path ../../data \
+    --out_root ./InferenceModels --email-to jmj3078@gmail.com   # 12 mixed conditions
+python train_inference_models.py --smoke                        # fast end-to-end check
+RUNNER=train_inference_models.py OUT_ROOT=./InferenceModels \
+    EMAIL_TO=jmj3078@gmail.com ./run_sweep.sh --email-per condition   # detached/resumable
+
 # Long, crash/reboot-resilient detached sweep (auto-restart, auto-resume):
 EMAIL_TO=jmj3078@gmail.com ./run_sweep.sh          # runs run_stage1.py by default
 RUNNER=run_ablations.py ./run_sweep.sh --groups drug
@@ -91,6 +98,17 @@ Key modules:
   — `build_drug_encoder` routes to Morgan (baseline), frozen pretrained
   embeddings (chemberta/molformer/graphormer/unimol), or end-to-end GIN/GCN.
 - **`nested_cv.py`** — the core CV fix (see below).
+- **`inference_models.py`** — SEPARATE track from `nested_cv` for producing
+  *deployable* models. Plain 5-fold CV where the held-out fold is used as the
+  early-stopping set (reuses `build_folds`: outer train+val → training pool,
+  outer-test → early-stopping fold); trains K models per condition and saves each
+  with its **per-fold gene scaler** (mean/scale) to a **separate folder**
+  (`InferenceModels/<tag>/fold_k.pt`, never `Results/`). `InferenceEnsemble.load`
+  → `.predict()` averages the K models on new data (each fold applies its own
+  saved scaler). These models' fold scores are early-stopping-optimistic and are
+  **NOT** performance numbers — report nested-CV for that; use these only for
+  inference on genuinely external data. Runner: `scripts/train_inference_models.py`
+  (12 mixed conditions, idempotent/resumable).
 - **`recorder.py`** — append-only `events.jsonl` (fsync'd), rebuilds
   `history.csv`/`summary.json`; fold-completion markers drive resume.
 - **`pipeline.py` / `ablations.py`** — staged runner + OFAT grid definitions.

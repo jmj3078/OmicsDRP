@@ -1,0 +1,7 @@
+# Vendored upstream repos: large, unmodified, reproducible via vendor/MANIFEST.md
+vendor/*
+!vendor/MANIFEST.md
+# Benchmark data exports & results (regenerable)
+export/
+export_smoke/
+BenchmarkResults/

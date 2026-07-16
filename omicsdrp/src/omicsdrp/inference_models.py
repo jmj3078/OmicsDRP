@@ -189,7 +189,6 @@ def train_inference_models(raw: RawData, config: ExperimentConfig,
         print(f"[skip] {tag}: all {config.outer_folds} fold models present")
         return cond_dir
 
-    summary = {"tag": tag, "folds": []}
     for fold, tr, es, tr_cells in _fold_pools(raw, config):
         fpath = os.path.join(cond_dir, f"fold_{fold}.pt")
         if os.path.exists(fpath):
@@ -205,13 +204,35 @@ def train_inference_models(raw: RawData, config: ExperimentConfig,
             "best_epoch": res["best_epoch"],
             "val_metrics": res["val_metrics"],
         }, fpath)
-        summary["folds"].append({"fold": fold, "best_epoch": res["best_epoch"],
-                                 "val_metrics": res["val_metrics"]})
+        # small sidecar so summary.json can be rebuilt without loading weights
+        _write_fold_meta(cond_dir, fold, res["best_epoch"], res["val_metrics"])
         print(f"[saved] {fpath}")
 
+    write_summary(cond_dir, tag)
+    return cond_dir
+
+
+def _write_fold_meta(cond_dir: str, fold: int, best_epoch, val_metrics) -> None:
+    with open(os.path.join(cond_dir, f"fold_{fold}_meta.json"), "w") as fh:
+        json.dump({"fold": fold, "best_epoch": best_epoch,
+                   "val_metrics": val_metrics}, fh, indent=2)
+
+
+def write_summary(cond_dir: str, tag: Optional[str] = None) -> dict:
+    """Rebuild summary.json from the per-fold sidecars.
+
+    Reads sidecars (not the .pt weights) so a RESUMED condition still summarises
+    every fold, including ones trained in an earlier run."""
+    import glob
+    folds = []
+    for p in sorted(glob.glob(os.path.join(cond_dir, "fold_*_meta.json"))):
+        with open(p) as fh:
+            folds.append(json.load(fh))
+    folds.sort(key=lambda d: d["fold"])
+    summary = {"tag": tag or os.path.basename(cond_dir.rstrip("/")), "folds": folds}
     with open(os.path.join(cond_dir, "summary.json"), "w") as fh:
         json.dump(summary, fh, indent=2)
-    return cond_dir
+    return summary
 
 
 # --------------------------------------------------------------------------- #

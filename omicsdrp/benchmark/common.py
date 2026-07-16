@@ -18,10 +18,25 @@ from __future__ import annotations
 
 import json
 import os
+import random
 from typing import Dict, List
 
 import numpy as np
 from sklearn.preprocessing import StandardScaler
+
+
+def set_seed(seed: int) -> None:
+    """Replicates omicsdrp.engine.set_seed EXACTLY, so competitor training shares
+    OmicsDRP's determinism protocol. Call per fold with ``base_seed + fold`` (as
+    nested_cv.run_fold does) so a fold is reproducible whether run alone or in a
+    sequence. Imports torch lazily (common.py stays importable in torch-free envs)."""
+    import torch
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    random.seed(seed)
 
 # Fixed omics column order inside the exported [N_cell, n_gene, 4] tensor,
 # mirroring omicsdrp.config.OMICS_ORDER (preprocessing-fixed).

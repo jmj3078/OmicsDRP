@@ -144,7 +144,6 @@ def main():
         a.epochs = min(a.epochs, 2)
         a.max_pairs = a.max_pairs or 512
         a.patience = min(a.patience, 2)
-    torch.manual_seed(a.seed); np.random.seed(a.seed)
     device = a.device
     if device == "cuda" and not torch.cuda.is_available():
         raise SystemExit("cuda requested but not available")
@@ -167,6 +166,7 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     for k in folds:
+        common.set_seed(a.seed + k)   # per-fold seed, identical to omicsdrp run_fold
         f = exp.load_fold(a.split_mode, k)
         if a.mode == "nested":
             train_idx, val_idx, eval_idx = (

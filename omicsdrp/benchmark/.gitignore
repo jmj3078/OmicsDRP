@@ -5,3 +5,6 @@ vendor/*
 export/
 export_smoke/
 BenchmarkResults/
+# python caches
+__pycache__/
+*.pyc

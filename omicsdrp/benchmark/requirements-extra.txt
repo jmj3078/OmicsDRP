@@ -1,0 +1,19 @@
+# Extra packages installed into the `omicsdrp` conda env for the Stage-2 benchmark.
+# (Base env already has torch 2.3.0+cu121, torch-geometric 2.6.1, rdkit, sklearn.)
+# Install order matters for the TGSA drug featurizer (dgl before first dgllife use).
+
+# unified per-pair prediction I/O (parquet, matches omicsdrp recorder schema)
+pyarrow
+
+# DeepTTA: ESPF/BPE SMILES tokenizer
+subword_nmt
+
+# TGSA: graclus pooling (torch_cluster) — use the PyG wheel index for torch 2.3+cu121
+#   pip install torch_cluster -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
+torch_cluster
+
+# TGSA: drug graph featurizer (dgllife ConcatFeaturizer, 77-dim); needs dgl backend.
+#   pip install dgl -f https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html
+#   export DGLBACKEND=pytorch
+dgl
+dgllife

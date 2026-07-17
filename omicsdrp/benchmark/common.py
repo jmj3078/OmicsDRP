@@ -182,6 +182,23 @@ def validate_predictions(df) -> None:
         raise ValueError("sample_idx/drug_idx contain nulls")
 
 
+def fold_outputs_exist(out_dir: str, fold: int, mode: str) -> bool:
+    """True if this fold is already complete (for resumable/detached runs).
+
+    nested   -> needs weights + meta + a prediction file (parquet or .pkl).
+    ensemble -> needs weights + meta (no held-out predictions are written).
+    The meta file is written LAST in every adapter, so its presence means the
+    fold finished cleanly."""
+    meta = os.path.join(out_dir, f"fold_{fold}_meta.json")
+    model = os.path.join(out_dir, f"fold_{fold}_model.pt")
+    if not (os.path.exists(meta) and os.path.exists(model)):
+        return False
+    if mode == "ensemble":
+        return True
+    pred = os.path.join(out_dir, f"fold_{fold}_predictions.parquet")
+    return os.path.exists(pred) or os.path.exists(pred[:-len(".parquet")] + ".pkl")
+
+
 def write_predictions(df, path: str) -> None:
     """Write per-pair predictions (parquet, .pkl fallback), schema-validated."""
     validate_predictions(df)

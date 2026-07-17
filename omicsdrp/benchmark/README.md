@@ -50,16 +50,27 @@ export DGLBACKEND=pytorch     # TGSA drug featurizer
 conda activate omicsdrp
 cd omicsdrp/benchmark
 
-# functional check — ZERO GPU contention (forces CPU, tiny data). Do this first.
-python export_data.py --smoke --dataset_path ../../data --out ./export_smoke
-CUDA_VISIBLE_DEVICES="" python adapters/deeptta/run.py  --export ./export_smoke --split_mode mixed --smoke --out ./BenchmarkResults/DeepTTA
-CUDA_VISIBLE_DEVICES="" python adapters/graphdrp/run.py --export ./export_smoke --split_mode mixed --smoke --out ./BenchmarkResults/GraphDRP
-CUDA_VISIBLE_DEVICES="" python adapters/tgsa/run.py     --export ./export_smoke --split_mode mixed --smoke --out ./BenchmarkResults/TGSA
-python score.py --results ./BenchmarkResults
+# functional check, tiny + fast. --smoke shrinks data/epochs; --device picks the
+# device (default cpu → set CUDA_VISIBLE_DEVICES="" for ZERO GPU contention, or
+# pass --device cuda when the GPU is free).
+CUDA_VISIBLE_DEVICES="" python run_benchmark.py --smoke --splits mixed --device cpu
 
-# full runs — GPU MUST be free (check nvidia-smi; the Stage-1 sweep saturates it)
-DEVICE=cuda ./run_all.sh
+# detached, resumable, auto-restarting full run (the way to run for real).
+# GPU MUST be free (check nvidia-smi; the Stage-1 sweep saturates it).
+EMAIL_TO=jmj3078@gmail.com DEVICE=cuda ./run_bench_sweep.sh
+#   monitor: cat BenchmarkResults/progress.md ; tail -f BenchmarkResults/sweep_logs/sweep_*.log
+#   stop:    kill "$(cat BenchmarkResults/sweep.pid)"   (progress kept; rerun to resume)
+#   GPU=1 ./run_bench_sweep.sh --models graphdrp tgsa   # pin a spare GPU / subset
 ```
+
+**Background stability** (mirrors `scripts/run_sweep.sh`): the sweep runs detached
+(survives terminal/SSH close), holds a single-instance lock, auto-restarts on
+failure, and is **fold-level resumable** — each adapter skips folds whose outputs
+already exist, so a crash/reboot loses no completed work (just rerun the same
+command). Failed conditions are logged in `progress.md` and skipped, never
+aborting the run. `run_benchmark.py` emails a summary on completion via the
+Stage-1 msmtp notifier (`EMAIL_TO` / `--email-to`; best-effort, never blocks).
+Use `--overwrite` to force recomputation of already-done folds.
 
 Per model × split × fold the adapters save: `fold_k_model.pt` (weights),
 `fold_k_scaler.npz` (fold cell scaler; TGSA also stores the gene edge_index),
@@ -79,10 +90,11 @@ Per model × split × fold the adapters save: `fold_k_model.pt` (weights),
 
 ```
 benchmark/
-  export_data.py   # freeze pairs/folds/omics/SMILES/labels (run in omicsdrp env)
-  common.py        # dep-light contract (numpy+sklearn): export reader, fold scaler, pred schema
-  score.py         # per-pair predictions -> regression_metrics -> summary csv
-  run_all.sh       # orchestrator (full GPU runs)
+  export_data.py     # freeze pairs/folds/omics/SMILES/labels (run in omicsdrp env)
+  common.py          # dep-light contract (numpy+sklearn): reader, fold scaler, seed, resume, pred schema
+  score.py           # per-pair predictions -> regression_metrics -> summary csv
+  run_benchmark.py   # resumable orchestrator (all models x splits x modes) + email summary
+  run_bench_sweep.sh # detached, auto-restarting, single-instance wrapper
   adapters/{deeptta,graphdrp,tgsa}/{model.py,run.py}
   vendor/          # unmodified upstream clones (gitignored; see MANIFEST.md)
   export/ export_smoke/ BenchmarkResults/   # generated, gitignored

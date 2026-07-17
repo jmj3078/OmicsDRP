@@ -66,6 +66,8 @@ def parse_args():
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--max_pairs", type=int, default=None,
                    help="cap pairs per split (smoke sets 512)")
+    p.add_argument("--overwrite", action="store_true",
+                   help="recompute folds even if their outputs already exist")
     return p.parse_args()
 
 
@@ -139,8 +141,7 @@ def train_one_fold(model, train_ds, val_ds, device, epochs, patience, lr, batch)
 # --------------------------------------------------------------------------- #
 def main():
     a = parse_args()
-    if a.smoke:
-        a.device = "cpu"
+    if a.smoke:   # tiny data/epochs; device is governed by --device (default cpu)
         a.epochs = min(a.epochs, 2)
         a.max_pairs = a.max_pairs or 512
         a.patience = min(a.patience, 2)
@@ -166,6 +167,9 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     for k in folds:
+        if not a.overwrite and common.fold_outputs_exist(out_dir, k, a.mode):
+            print(f"[DeepTTA] {a.split_mode}/{a.mode} fold {k}: done, skipping")
+            continue
         common.set_seed(a.seed + k)   # per-fold seed, identical to omicsdrp run_fold
         f = exp.load_fold(a.split_mode, k)
         if a.mode == "nested":

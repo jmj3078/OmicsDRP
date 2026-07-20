@@ -4,4 +4,8 @@
 *.json
 *.jsonl
 *.pt
-Benchmark/
+Benchmark/benchmark_sources/
+Benchmark/DeepTTA/
+Benchmark/GraphDRP/
+Benchmark/our_data/
+Benchmark/PaccMann/

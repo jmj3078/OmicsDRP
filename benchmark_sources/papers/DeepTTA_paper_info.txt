@@ -1,5 +1,0 @@
-DeepTTA: a transformer-based model for predicting cancer drug response
-Jiang, Likun, et al.
-Briefings in Bioinformatics 2022
-DOI: 10.1093/bib/bbac100
-URL: https://academic.oup.com/bib/article/23/3/bbac100/6554594?login=true

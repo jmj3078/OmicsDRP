@@ -1,5 +1,0 @@
-TGSA: Twin Graph Neural Network with Similarity Augmentation for predicting drug response
-violet-sto
-Bioinformatics 2022
-DOI: 10.1093/bioinformatics/btab562
-URL: https://academic.oup.com/bioinformatics/article/38/2/496/6380567

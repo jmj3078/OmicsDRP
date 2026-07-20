@@ -1,0 +1,5 @@
+Toward Explainable Anticancer Compound Sensitivity Prediction via Multimodal Attention-Based Convolutional Encoders
+Manica, Matteo, et al.
+Molecular Pharmaceutics 2019
+DOI: 10.1021/acs.molpharmaceut.9b00520
+URL: https://pubs.acs.org/doi/10.1021/acs.molpharmaceut.9b00520

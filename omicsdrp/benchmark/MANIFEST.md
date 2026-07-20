@@ -31,7 +31,7 @@ Upstream sources are imported unmodified; every change lives in `adapters/`.
 |---|---|---|---|
 | DeepTTA | U219 RMA basal expression, 17,737 genes | ESPF subword tokens (max 50) | **none** — `Step1_getData.getRna` only slices columns |
 | GraphDRP | 735 binary mutation/CNV features | SMILES → molecular graph, 78-dim atom features | **none** — binary indicators fed raw |
-| PaccMann | 2,128-gene panel (`2128_genes.pkl`) | SMILES via PaccMann's SMILES language | pytoda `gene_expression_standardize=True`, fit on the training fold and reused for the held-out fold (`train_paccmann.py:139,170`) |
+| PaccMann | 2,128-gene panel (`2128_genes.pkl`) | SMILES via PaccMann's pretrained SMILES language (`datasets/smiles_language/`) | pytoda `gene_expression_standardize=True`, fit on the training fold and reused for the held-out fold (`train_paccmann.py:139,170`) |
 
 No preprocessing step was added that the original model does not perform.
 Hyperparameters come from upstream defaults (DeepTTA `lr=1e-4, batch=64,
@@ -104,12 +104,3 @@ python run_benchmark.py --models deeptta --splits unseen_drug
 Jobs are fold-level resumable (a fold with `metrics.json` + `model.pt` is
 skipped); `--overwrite` forces recompute. Progress is written to
 `BenchmarkResults/progress.{md,json}`.
-
-## Known gap
-
-PaccMann needs `single_pytorch_model/smiles_language/` from
-<https://ibm.biz/paccmann-data>, placed at `Benchmark/PaccMann/datasets/smiles_language/`.
-The legacy `smiles_language_chembl_gdsc_ccle.pkl` shipped in the data bundle
-loses its special tokens under pytoda 1.1.7 (87 → 83 tokens) and the embedding
-lookup then goes out of range. Rebuilding that vocabulary ourselves would mean
-inventing an input the model never had, so the adapter waits for the real file.

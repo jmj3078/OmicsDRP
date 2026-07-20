@@ -9,3 +9,8 @@
 | graphdrp | mixed | nested | ok | 5.3 |
 | graphdrp | unseen_cell | nested | ok | 5.5 |
 | graphdrp | unseen_drug | nested | ok | 5.4 |
+| graphdrp | mixed | ensemble | ok | 5.4 |
+| paccmann | mixed | nested | ok | 22.3 |
+| paccmann | unseen_cell | nested | ok | 22.1 |
+| paccmann | unseen_drug | nested | ok | 21.6 |
+| paccmann | mixed | ensemble | ok | 22.2 |

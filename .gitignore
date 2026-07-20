@@ -4,6 +4,7 @@
 *.json
 *.jsonl
 *.pt
+*.parquet
 Benchmark/benchmark_sources/
 Benchmark/DeepTTA/
 Benchmark/GraphDRP/

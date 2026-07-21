@@ -114,7 +114,10 @@ def run(adapter: BaseAdapter, argv=None) -> None:
     args = ap.parse_args(argv)
 
     if args.smoke:
-        args.epochs = min(args.epochs, 2)
+        # An explicit --epochs wins, so smoke can also be used for a quick
+        # "does this model actually learn" check on a subsample.
+        if args.epochs == adapter.default_epochs:
+            args.epochs = 2
         args.folds = "1"
 
     device = torch.device(args.device)

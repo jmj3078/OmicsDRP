@@ -4,11 +4,14 @@ Native cell input : 735 binary genomic features (mutation + CNV) from
                     ``PANCANCER_Genetic_feature.csv``, fed to a 1-D CNN.
 Native drug input : SMILES -> molecular graph (78-dim atom features) via
                     GraphDRP's own ``preprocess.smile_to_graph``, encoded by GIN.
-Label             : ln(IC50). GraphDRP's paper squashes the target with
-                    sigmoid(0.1*x); we keep the shared ln target instead so the
-                    reported metric is on the same scale as every other model
-                    here. Only the label transform differs from upstream — the
-                    inputs and architecture are untouched.
+Label             : GraphDRP's own normalisation, ``1/(1+exp(ln_ic50)**-0.1)``
+                    = sigmoid(0.1*ln_ic50) (``preprocess.py:243``). This is not
+                    optional: the network ends in ``nn.Sigmoid()``
+                    (``models/ginconv.py:111``), so it can only ever emit values
+                    in (0,1). Feeding it raw ln(IC50) saturates the output and
+                    the model dies after one epoch. Predictions are inverted
+                    back to ln(IC50) before scoring so the metric matches the
+                    other models.
 
 Run inside the ``benchmark_graphdrp`` env.
 """
@@ -32,6 +35,22 @@ sys.path.insert(0, str(UPSTREAM))
 
 from models.ginconv import GINConvNet  # noqa: E402
 from preprocess import smile_to_graph  # noqa: E402
+
+
+def _normalise(ln_ic50: float) -> float:
+    """GraphDRP's target transform, preprocess.py:243."""
+    return 1.0 / (1.0 + np.exp(ln_ic50) ** -0.1)
+
+
+def _denormalise(y):
+    """Inverse of _normalise, back to ln(IC50).
+
+    The 0.1 factor makes the sigmoid very flat, so real labels occupy roughly
+    (0.4, 0.78) and the inversion is well conditioned; the clip is only a guard
+    against a prediction landing exactly on 0 or 1.
+    """
+    y = np.clip(np.asarray(y, dtype=np.float64), 1e-6, 1 - 1e-6)
+    return 10.0 * np.log(y / (1.0 - y))
 
 
 class GraphDRPAdapter(_base.BaseAdapter):
@@ -91,7 +110,7 @@ class GraphDRPAdapter(_base.BaseAdapter):
             x, edge_index = self.graphs[d]
             items.append(Data(
                 x=x, edge_index=edge_index,
-                y=torch.tensor([float(export.y[pi])]),
+                y=torch.tensor([_normalise(float(export.y[pi]))], dtype=torch.float),
                 target=torch.tensor(self.cell_feat[c]).unsqueeze(0),
             ))
         # upstream training.py builds its loaders with defaults (drop_last=False)
@@ -104,6 +123,9 @@ class GraphDRPAdapter(_base.BaseAdapter):
         batch = batch.to(self.device)
         pred, _ = model(batch)
         return pred.squeeze(-1), batch.y.view(-1)
+
+    def to_native_label(self, values):
+        return _denormalise(values)
 
 
 if __name__ == "__main__":

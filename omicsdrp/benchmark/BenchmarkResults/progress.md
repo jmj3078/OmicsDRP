@@ -10,3 +10,4 @@
 | graphdrp | unseen_cell | nested | ok | 373.4 |
 | graphdrp | unseen_drug | nested | ok | 287.0 |
 | graphdrp | mixed | ensemble | ok | 335.9 |
+| paccmann | mixed | nested | ok | 34103.5 |

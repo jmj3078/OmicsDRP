@@ -126,6 +126,23 @@ class PaccMannAdapter(_base.BaseAdapter):
             selfies=p.get("selfies", False),
             sanitize=p.get("selfies", False),
         )
+        # test_smiles_language is deterministic (augment=False), unlike
+        # self.smiles_language which upstream deliberately randomises every
+        # call (augment_smiles=True is real SMILES augmentation, not
+        # incidental cost — must not be cached). The early-stop set is
+        # re-tokenised from scratch on every epoch of every fold with only
+        # 231 unique drugs, so caching this path only is a pure speedup.
+        _tokenize = self.test_smiles_language.smiles_to_token_indexes
+        _cache: dict = {}
+
+        def _cached_tokenize(smiles, _cache=_cache, _tokenize=_tokenize):
+            cached = _cache.get(smiles)
+            if cached is None:
+                cached = _tokenize(smiles)
+                _cache[smiles] = cached
+            return cached.clone()
+
+        self.test_smiles_language.smiles_to_token_indexes = _cached_tokenize
 
         self.drug_ok = np.ones(len(export.drug_smiles), dtype=bool)
         print(f"  cells with expression: {self.cell_ok.sum()}/{len(cosmic)} | "
@@ -194,9 +211,15 @@ class PaccMannAdapter(_base.BaseAdapter):
         # drop_last=True on training only (upstream setting). Held-out loaders
         # must keep every pair and their order so predictions stay aligned with
         # the fold indices we save.
+        #
+        # num_workers=0 for eval/early-stop: this loader is re-iterated once
+        # per epoch for early stopping, and the SMILES tokenization cache
+        # above only pays off if it lives in *this* process — a forked
+        # worker rebuilds (and discards) its own copy every iteration since
+        # persistent_workers isn't set, silently erasing the speedup.
         return torch.utils.data.DataLoader(
             ds, batch_size=batch_size, shuffle=shuffle, drop_last=shuffle,
-            num_workers=0)
+            num_workers=1 if shuffle else 0)
 
     def build_model(self):
         params = dict(self.params)

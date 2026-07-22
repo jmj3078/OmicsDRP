@@ -1,3 +1,4 @@
+# Heavy Data
 *.csv
 *.log
 *.pkl
@@ -5,7 +6,11 @@
 *.jsonl
 *.pt
 *.parquet
-*/__pycache__/*
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+# Benchmark sources
 Benchmark/benchmark_sources/
 Benchmark/DeepTTA/
 Benchmark/GraphDRP/

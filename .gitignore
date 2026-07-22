@@ -5,6 +5,7 @@
 *.jsonl
 *.pt
 *.parquet
+*/__pycache__/*
 Benchmark/benchmark_sources/
 Benchmark/DeepTTA/
 Benchmark/GraphDRP/

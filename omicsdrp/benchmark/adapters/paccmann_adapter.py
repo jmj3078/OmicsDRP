@@ -79,6 +79,7 @@ class PaccMannAdapter(_base.BaseAdapter):
         rows = np.zeros((len(cosmic), len(self.gene_list)), dtype=np.float32)
         present = np.where(self.cell_ok)[0]
         rows[present] = expr.loc[cosmic[present], self.gene_list].values.astype(np.float32)
+        self._expr_matrix = rows  # kept for fit-fold-only standardization below
 
         self.workdir = Path(tempfile.mkdtemp(prefix="paccmann_bench_"))
         self.gep_path = self.workdir / "gene_expression.csv"
@@ -135,10 +136,17 @@ class PaccMannAdapter(_base.BaseAdapter):
         return pair_idx[self.cell_ok[p[:, 0]]]
 
     def fit_scaler(self, export, fit_idx):
-        # pytoda owns the standardisation (fit on the training file); nothing for
-        # the harness to fit here. The fitted parameters are saved per fold below.
-        self._fit_idx = fit_idx
-        return None
+        # gene_expression.csv holds every cell (pytoda needs one file for all
+        # folds), so pytoda's own fit-from-file would see val/test cells too.
+        # Compute mean/std over the fit fold's cells ourselves and force
+        # pytoda to use them via gene_expression_processing_parameters,
+        # matching the leakage boundary used everywhere else in this repo.
+        train_cells = export.train_cells(fit_idx)
+        X = self._expr_matrix[train_cells]
+        mean = X.mean(axis=0).astype(np.float64)
+        std = X.std(axis=0).astype(np.float64)
+        self._gep_processing = {"mean": mean.tolist(), "std": std.tolist()}
+        return mean.astype(np.float32), std.astype(np.float32)
 
     def _write_sensitivity(self, export, pair_idx, name):
         p = export.pairs[pair_idx]
@@ -163,8 +171,7 @@ class PaccMannAdapter(_base.BaseAdapter):
             gene_expression_standardize=self.params.get(
                 "gene_expression_standardize", True),
             gene_expression_min_max=self.params.get("gene_expression_min_max", False),
-            gene_expression_processing_parameters=(
-                {} if processing is None else processing["gene_expression"]),
+            gene_expression_processing_parameters=self._gep_processing,
             iterate_dataset=False,
         )
 
@@ -180,7 +187,6 @@ class PaccMannAdapter(_base.BaseAdapter):
             self._vocab_size = ds.smiles_dataset.smiles_language.number_of_tokens
             self._processing = {
                 "drug_sensitivity": ds.drug_sensitivity_processing_parameters,
-                "gene_expression": ds.gene_expression_dataset.processing,
             }
         else:
             ds = self._dataset(path, self.test_smiles_language, self._processing)

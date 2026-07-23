@@ -1,3 +1,0 @@
-CPP	http_error_404
-sevelamer	http_error_404
-tyloxapol	http_error_404

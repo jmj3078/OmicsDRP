@@ -7,10 +7,11 @@
 *.pt
 *.pth
 *.parquet
+*.smi
+*.txt
 # Python cache files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# BenchSources 
-BenchSources/*
+/BenchSources/*

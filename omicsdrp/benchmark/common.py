@@ -27,7 +27,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCH_DIR = REPO_ROOT / "omicsdrp" / "benchmark"
 EXPORT_DIR = BENCH_DIR / "exports"
-VENDOR_DIR = REPO_ROOT / "Benchmark"          # upstream clones + their native data
+VENDOR_DIR = REPO_ROOT / "BenchSources"          # upstream clones + their native data
 OMICSDRP_SRC = REPO_ROOT / "omicsdrp" / "src"
 DATA_DIR = REPO_ROOT / "data"
 

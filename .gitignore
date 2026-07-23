@@ -11,9 +11,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-# Benchmark sources
-Benchmark/benchmark_sources/
-Benchmark/DeepTTA/
-Benchmark/GraphDRP/
-Benchmark/our_data/
-Benchmark/PaccMann/
+
+# BenchSources 
+BenchSources/*

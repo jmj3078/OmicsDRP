@@ -111,11 +111,6 @@ def _make_loader(gene_tensor, ic50, pair_idx, pairs, batch_size, shuffle,
 # training
 # --------------------------------------------------------------------------- #
 def _fold_pools(raw: RawData, config: ExperimentConfig):
-    """Yield (fold_num, train_pair_idx, esval_pair_idx, train_sample_indices).
-
-    Reuses build_folds: outer train+val -> training pool; outer test -> the
-    early-stopping validation fold. Scaler cells come from the training pool
-    only (never the early-stopping fold)."""
     cell_of = raw.pairs[:, 0]
     for f in build_folds(raw, config):
         train_idx = np.concatenate([f.train_pair_idx, f.val_pair_idx])
@@ -220,7 +215,6 @@ def _write_fold_meta(cond_dir: str, fold: int, best_epoch, val_metrics) -> None:
 
 def write_summary(cond_dir: str, tag: Optional[str] = None) -> dict:
     """Rebuild summary.json from the per-fold sidecars.
-
     Reads sidecars (not the .pt weights) so a RESUMED condition still summarises
     every fold, including ones trained in an earlier run."""
     import glob
@@ -240,7 +234,6 @@ def write_summary(cond_dir: str, tag: Optional[str] = None) -> dict:
 # --------------------------------------------------------------------------- #
 class InferenceEnsemble:
     """Load a condition's K fold models and average their predictions.
-
     Use for prediction on NEW data in the SAME feature space (same 909 genes,
     same drug set / drug_meta the models were trained with). Each fold applies
     its own saved scaler before predicting."""
@@ -289,12 +282,6 @@ class InferenceEnsemble:
                                          ck["scaler_mean"], ck["scaler_scale"])
             gene_tensor = stack_gene_data(scaled, genes)
             model = DRPModel(genes, drug_meta, self.config).to(self.device)
-            # strict=False: checkpoints saved before fp_table/emb_table became
-            # non-persistent still carry that buffer under the old drug set's
-            # shape -- it's derived data the freshly-built model already has
-            # correctly for the new drug_meta, so an "unexpected key" here is
-            # expected and safe to ignore. A real parameter shape mismatch
-            # still raises, strict=False only tolerates missing/unexpected keys.
             model.load_state_dict(ck["model_state"], strict=False)
             model.eval()
 

@@ -2,8 +2,6 @@
 *.csv
 *.log
 *.pkl
-*.json
-*.jsonl
 *.pt
 *.pth
 *.parquet
@@ -13,5 +11,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+# benchmarking sources (heavy data)
 /BenchSources/*
+# claude files
+/.claude/
+/CLAUDE.md

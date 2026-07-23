@@ -1,18 +1,20 @@
-"""Standalone: run DeepTTA's deployed ensemble__mixed fold models on CCLE/PRISM-MTS.
+"""Standalone: run DeepTTA's deployed ensemble__mixed fold models on CCLE/PRISM.
 
 Reads the frozen export from ``ccle_preprocess.py`` (pairs, IC50 matrix,
 gene-resolved CCLE expression matrix in DeepTTA's trained gene order, drug
-SMILES table). DeepTTA feeds raw (unscaled) expression directly -- 321 of its
-17,419 trained gene columns have no CCLE measurement at all (299 genuinely
+SMILES table). DeepTTA feeds raw (unscaled) expression directly -- 639 of its
+17,737 trained gene columns have no CCLE measurement at all (617 genuinely
 missing + 22 ambiguous HGNC renames, left unresolved on purpose), so those
 columns are imputed at the GDSC training-set mean (computed once here from
 the same RMA table DeepTTA was trained on) before scoring.
 
 Run inside the ``benchmark_deeptta`` env:
-    conda run -n benchmark_deeptta python ccle_infer_deeptta.py
+    conda run -n benchmark_deeptta python ccle_infer_deeptta.py --split mts
+    conda run -n benchmark_deeptta python ccle_infer_deeptta.py --split hts
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -68,12 +70,16 @@ def encode_drugs(smiles_list) -> tuple:
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--split", choices=["mts", "hts"], default="mts")
+    args = ap.parse_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     Step3_model.device = device
 
-    meta = json.loads((EXPORT_DIR / "ccle_mts.meta.json").read_text())
-    z = np.load(EXPORT_DIR / "ccle_mts.npz")
-    drug_table = pd.read_csv(EXPORT_DIR / "ccle_mts_drug_meta.csv")
+    meta = json.loads((EXPORT_DIR / f"ccle_{args.split}.meta.json").read_text())
+    z = np.load(EXPORT_DIR / f"ccle_{args.split}.npz")
+    drug_table = pd.read_csv(EXPORT_DIR / f"ccle_{args.split}_drug_meta.csv")
 
     gene_order = meta["deeptta"]["gene_order"]
     expr = z["deeptta_expr"].copy()  # [n_cell, n_gene], NaN for unresolved genes
@@ -84,7 +90,7 @@ def main():
     expr[:, nan_cols] = fill[nan_cols]
     assert not np.isnan(expr).any(), "unexpected residual NaN after imputation"
 
-    print(f"[deeptta] tokenising {len(drug_table)} CCLE/PRISM-MTS drug SMILES ...")
+    print(f"[deeptta] tokenising {len(drug_table)} CCLE/PRISM-{args.split.upper()} drug SMILES ...")
     tokens, masks = encode_drugs(drug_table["smiles"])
 
     pairs = z["pairs"]
@@ -118,16 +124,17 @@ def main():
     out_dir = HERE / "BenchmarkResults" / "ccle_external"
     out_dir.mkdir(parents=True, exist_ok=True)
     cell_ids = meta["cell_ids"]
+    tag = f"deeptta__{args.split}"
     pd.DataFrame({
         "cell_idx": pairs[:, 0], "drug_idx": pairs[:, 1],
         "cell_id": [cell_ids[i] for i in pairs[:, 0]],
         "drug_name": [drug_table["prism_name"].iloc[i] for i in pairs[:, 1]],
         "true": true, "pred": pred,
-    }).to_parquet(out_dir / "deeptta_predictions.parquet", index=False)
-    (out_dir / "deeptta_metrics.json").write_text(json.dumps(metrics, indent=2))
+    }).to_parquet(out_dir / f"{tag}_predictions.parquet", index=False)
+    (out_dir / f"{tag}_metrics.json").write_text(json.dumps(metrics, indent=2))
 
     print("[deeptta] metrics:", json.dumps(metrics, indent=2))
-    print("saved:", out_dir / "deeptta_predictions.parquet")
+    print("saved:", out_dir / f"{tag}_predictions.parquet")
 
 
 if __name__ == "__main__":

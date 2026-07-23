@@ -31,10 +31,10 @@ sys.path.insert(0, str(REPO_ROOT / "omicsdrp" / "src"))
 from omicsdrp.inference_models import InferenceEnsemble  # noqa: E402
 
 
-def load_export():
-    meta = json.loads((EXPORT_DIR / "ccle_mts.meta.json").read_text())
-    z = np.load(EXPORT_DIR / "ccle_mts.npz")
-    drug_table = pd.read_csv(EXPORT_DIR / "ccle_mts_drug_meta.csv")
+def load_export(split: str):
+    meta = json.loads((EXPORT_DIR / f"ccle_{split}.meta.json").read_text())
+    z = np.load(EXPORT_DIR / f"ccle_{split}.npz")
+    drug_table = pd.read_csv(EXPORT_DIR / f"ccle_{split}_drug_meta.csv")
     return meta, z, drug_table
 
 
@@ -62,12 +62,23 @@ def impute_missing_channels(gene_data: dict, ensemble) -> tuple:
     folds), which becomes exactly 0 once the model's standardization is
     applied -- consistent with how the harness treats missing input elsewhere.
     """
+    # Every condition trains on its own omics subset (config.omics_indices());
+    # a channel this condition never reads (e.g. CNV for a "MET+RNA" model)
+    # is never selected out of gene_data at all (_apply_saved_scaler slices
+    # to omics_indices before scaling), so NaN there is irrelevant -- only
+    # channels actually used by at least one fold need imputing.
+    used_channels = set()
+    for ck in ensemble.folds:
+        used_channels.update(ck["omics_indices"])
+
     imputed = []
     for gene, tensor in gene_data.items():
         nan_cols = torch.isnan(tensor).any(dim=0)
         if not nan_cols.any():
             continue
         for local_ch in nan_cols.nonzero(as_tuple=True)[0].tolist():
+            if local_ch not in used_channels:
+                continue
             fold_means = []
             for ck in ensemble.folds:
                 omics_indices = ck["omics_indices"]
@@ -90,12 +101,13 @@ def impute_missing_channels(gene_data: dict, ensemble) -> tuple:
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--split", choices=["mts", "hts"], default="mts")
     ap.add_argument("--condition", default="SNP+MET+CNV+RNA__attention__morgan__mixed__c94ea3")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--out", default=str(HERE / "BenchmarkResults" / "ccle_external"))
     args = ap.parse_args()
 
-    meta, z, drug_table = load_export()
+    meta, z, drug_table = load_export(args.split)
     cell_ids = meta["cell_ids"]
 
     gene_data = torch.load(CCLE_DIR / "CCLE_PGKB_Gene_data_dict.pth", weights_only=False)
@@ -120,23 +132,24 @@ def main():
               f"GDSC training-mean, averaged across folds:")
         for gene, ch in imputed:
             print(f"    {gene} / {ch}")
-    print(f"[omicsdrp] predicting {len(pairs)} CCLE/PRISM-MTS pairs "
+    print(f"[omicsdrp] predicting {len(pairs)} CCLE/PRISM-{args.split.upper()} pairs "
           f"({meta['n_cell']} cells x {meta['n_drug']} drugs) ...")
 
     result = ensemble.predict(gene_data, drug_meta, pairs, ic50=ic50)
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
+    tag = f"omicsdrp__{args.condition}__{args.split}"
     pd.DataFrame({
         "cell_idx": pairs[:, 0], "drug_idx": pairs[:, 1],
         "cell_id": [cell_ids[i] for i in pairs[:, 0]],
         "drug_name": [drug_table["prism_name"].iloc[i] for i in pairs[:, 1]],
         "true": result["true"], "pred": result["pred"],
-    }).to_parquet(out_dir / "omicsdrp_predictions.parquet", index=False)
-    (out_dir / "omicsdrp_metrics.json").write_text(json.dumps(result["metrics"], indent=2))
+    }).to_parquet(out_dir / f"{tag}_predictions.parquet", index=False)
+    (out_dir / f"{tag}_metrics.json").write_text(json.dumps(result["metrics"], indent=2))
 
     print("[omicsdrp] metrics:", json.dumps(result["metrics"], indent=2))
-    print("saved:", out_dir / "omicsdrp_predictions.parquet")
+    print("saved:", out_dir / f"{tag}_predictions.parquet")
 
 
 if __name__ == "__main__":

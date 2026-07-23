@@ -1,4 +1,4 @@
-"""Builds a frozen CCLE/PRISM-MTS export for external validation.
+"""Builds a frozen CCLE/PRISM export (MTS or HTS) for external validation.
 
 Single source of truth for what data the CCLE inference scripts see: reads
 the already-prepared ``data/ccle_processed/`` tables once, resolves
@@ -15,9 +15,14 @@ The 909-gene PGKB panel omicsdrp uses has an exact 909/909 match already
 (verified separately) -- this export does not duplicate it; the omicsdrp
 inference script reads ``CCLE_PGKB_Gene_data_dict.pth`` directly, using the
 ``cell_ids`` order recorded here to confirm alignment.
+
+Usage:
+    python ccle_preprocess.py --split mts   # 172 drugs, 488 cells (default)
+    python ccle_preprocess.py --split hts   # 1346 drugs, 338 cells
 """
 from __future__ import annotations
 
+import argparse
 import json
 import pickle
 import sys
@@ -43,11 +48,18 @@ def _canonical_cell_order() -> list:
     return list(idx)
 
 
-def _load_mts_drug_table() -> pd.DataFrame:
+SPLIT_CONFIG = {
+    "mts": {"col_idx_field": "mts_col_idx", "label_file": "IC50_PRIMS_MTS.csv"},
+    "hts": {"col_idx_field": "hts_col_idx", "label_file": "IC50_PRIMS_HTS.csv"},
+}
+
+
+def _load_drug_table(split: str) -> pd.DataFrame:
+    col_idx_field = SPLIT_CONFIG[split]["col_idx_field"]
     df = pd.read_csv(CCLE_DIR / "PRISM_drug_smiles.csv")
-    mts = df[df["mts_col_idx"].notna()].copy()
-    mts["mts_col_idx"] = mts["mts_col_idx"].astype(int)
-    return mts.sort_values("mts_col_idx").reset_index(drop=True)
+    sub = df[df[col_idx_field].notna()].copy()
+    sub[col_idx_field] = sub[col_idx_field].astype(int)
+    return sub.sort_values(col_idx_field).reset_index(drop=True)
 
 
 def _gdsc_rma_index() -> pd.Index:
@@ -100,17 +112,19 @@ def _resolved_gene_matrix(trained_genes, cell_order, rna):
     return mat, resolved, missing, ambiguous
 
 
-def build() -> None:
-    cell_order = _canonical_cell_order()
-    drug_table = _load_mts_drug_table()
-    n_cell, n_drug = len(cell_order), len(drug_table)
-    print(f"cells={n_cell} drugs={n_drug}")
+def build(split: str = "mts") -> None:
+    label_file = SPLIT_CONFIG[split]["label_file"]
 
-    ic50_df = pd.read_csv(CCLE_DIR / "IC50_PRIMS_MTS.csv", index_col=0)
+    cell_order = _canonical_cell_order()
+    drug_table = _load_drug_table(split)
+    n_cell, n_drug = len(cell_order), len(drug_table)
+    print(f"[{split}] cells={n_cell} drugs={n_drug}")
+
+    ic50_df = pd.read_csv(CCLE_DIR / label_file, index_col=0)
     ic50_df = ic50_df.reindex(index=cell_order, columns=drug_table["prism_name"])
     ic50 = ic50_df.values.astype(np.float32)
     pairs = np.argwhere(~np.isnan(ic50))
-    print(f"pairs (non-NaN IC50): {len(pairs)}")
+    print(f"[{split}] pairs (non-NaN IC50): {len(pairs)}")
 
     morgan = np.stack([
         np.array([int(b) for b in s.split(",")], dtype=np.float32)
@@ -128,13 +142,14 @@ def build() -> None:
 
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     np.savez(
-        EXPORT_DIR / "ccle_mts.npz",
+        EXPORT_DIR / f"ccle_{split}.npz",
         pairs=pairs, ic50=ic50, morgan_fingerprint=morgan,
         deeptta_expr=deeptta_mat, paccmann_expr=paccmann_mat,
     )
-    drug_table.to_csv(EXPORT_DIR / "ccle_mts_drug_meta.csv", index=False)
+    drug_table.to_csv(EXPORT_DIR / f"ccle_{split}_drug_meta.csv", index=False)
 
     meta = {
+        "split": split,
         "n_cell": n_cell, "n_drug": n_drug, "n_pairs": int(len(pairs)),
         "cell_ids": cell_order,
         "drug_names": drug_table["prism_name"].tolist(),
@@ -156,16 +171,19 @@ def build() -> None:
             "no imputation needed."
         ),
     }
-    (EXPORT_DIR / "ccle_mts.meta.json").write_text(json.dumps(meta, indent=2))
+    (EXPORT_DIR / f"ccle_{split}.meta.json").write_text(json.dumps(meta, indent=2))
 
-    print(f"deeptta gene coverage: "
+    print(f"[{split}] deeptta gene coverage: "
           f"{len(deeptta_genes) - len(deeptta_missing) - len(deeptta_amb)}/{len(deeptta_genes)}"
           f" ({len(deeptta_missing)} missing, {len(deeptta_amb)} ambiguous)")
-    print(f"paccmann gene coverage: "
+    print(f"[{split}] paccmann gene coverage: "
           f"{len(paccmann_genes) - len(paccmann_missing) - len(paccmann_amb)}/{len(paccmann_genes)}"
           f" ({len(paccmann_missing)} missing, {len(paccmann_amb)} ambiguous)")
-    print("saved:", EXPORT_DIR / "ccle_mts.npz")
+    print("saved:", EXPORT_DIR / f"ccle_{split}.npz")
 
 
 if __name__ == "__main__":
-    build()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--split", choices=list(SPLIT_CONFIG), default="mts")
+    args = ap.parse_args()
+    build(args.split)

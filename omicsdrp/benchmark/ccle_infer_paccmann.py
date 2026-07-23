@@ -1,4 +1,4 @@
-"""Standalone: run PaccMann's deployed ensemble__mixed fold models on CCLE/PRISM-MTS.
+"""Standalone: run PaccMann's deployed ensemble__mixed fold models on CCLE/PRISM.
 
 Reads the frozen export from ``ccle_preprocess.py`` (pairs, IC50 matrix,
 gene-resolved CCLE expression matrix in PaccMann's trained gene order, drug
@@ -15,10 +15,12 @@ pytoda computed at training time (min/max of ln(IC50) over that fold's
 outer-train+val pool, the same set the adapter used as ``fit_idx``).
 
 Run inside the ``benchmark_paccmann`` env:
-    conda run -n benchmark_paccmann python ccle_infer_paccmann.py
+    conda run -n benchmark_paccmann python ccle_infer_paccmann.py --split mts
+    conda run -n benchmark_paccmann python ccle_infer_paccmann.py --split hts
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -70,12 +72,16 @@ def build_test_smiles_language(params: dict) -> SMILESTokenizer:
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--split", choices=["mts", "hts"], default="mts")
+    args = ap.parse_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     params = json.loads(PARAMS_FILE.read_text())
 
-    meta = json.loads((EXPORT_DIR / "ccle_mts.meta.json").read_text())
-    z = np.load(EXPORT_DIR / "ccle_mts.npz")
-    drug_table = pd.read_csv(EXPORT_DIR / "ccle_mts_drug_meta.csv")
+    meta = json.loads((EXPORT_DIR / f"ccle_{args.split}.meta.json").read_text())
+    z = np.load(EXPORT_DIR / f"ccle_{args.split}.npz")
+    drug_table = pd.read_csv(EXPORT_DIR / f"ccle_{args.split}_drug_meta.csv")
 
     n_gene = meta["paccmann"]["n_trained_genes"]
     raw_expr = z["paccmann_expr"]  # [n_cell, n_gene], NaN for unresolved genes
@@ -85,7 +91,7 @@ def main():
           f"-- imputed per-fold at that fold's own training mean")
 
     lang = build_test_smiles_language(params)
-    print(f"[paccmann] tokenising {len(drug_table)} CCLE/PRISM-MTS drug SMILES ...")
+    print(f"[paccmann] tokenising {len(drug_table)} CCLE/PRISM-{args.split.upper()} drug SMILES ...")
     smiles_tokens = torch.stack([
         lang.smiles_to_token_indexes(str(s)) for s in drug_table["smiles"]
     ])
@@ -139,16 +145,17 @@ def main():
     out_dir = HERE / "BenchmarkResults" / "ccle_external"
     out_dir.mkdir(parents=True, exist_ok=True)
     cell_ids = meta["cell_ids"]
+    tag = f"paccmann__{args.split}"
     pd.DataFrame({
         "cell_idx": pairs[:, 0], "drug_idx": pairs[:, 1],
         "cell_id": [cell_ids[i] for i in pairs[:, 0]],
         "drug_name": [drug_table["prism_name"].iloc[i] for i in pairs[:, 1]],
         "true": true, "pred": pred,
-    }).to_parquet(out_dir / "paccmann_predictions.parquet", index=False)
-    (out_dir / "paccmann_metrics.json").write_text(json.dumps(metrics, indent=2))
+    }).to_parquet(out_dir / f"{tag}_predictions.parquet", index=False)
+    (out_dir / f"{tag}_metrics.json").write_text(json.dumps(metrics, indent=2))
 
     print("[paccmann] metrics:", json.dumps(metrics, indent=2))
-    print("saved:", out_dir / "paccmann_predictions.parquet")
+    print("saved:", out_dir / f"{tag}_predictions.parquet")
 
 
 if __name__ == "__main__":

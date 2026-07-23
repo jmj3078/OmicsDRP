@@ -1,5 +1,3 @@
-
-
 #!/bin/bash
 conda run -n omicsdrp python ccle_infer_omicsdrp.py --split mts --condition CNV+RNA__attention__morgan__mixed__47a229
 conda run -n omicsdrp python ccle_infer_omicsdrp.py --split mts --condition MET+CNV+RNA__attention__morgan__mixed__6589e6

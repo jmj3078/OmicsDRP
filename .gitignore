@@ -4,7 +4,6 @@
 *.pkl
 *.pt
 *.pth
-*.parquet
 *.smi
 *.txt
 # Python cache files
@@ -13,6 +12,10 @@ __pycache__/
 *$py.class
 # benchmarking sources (heavy data)
 /BenchSources/*
+
+# baseline inference model weights -- shared for downstream analysis
+# (SNP+MET+CNV+RNA, attention cell encoder, morgan drug encoder, mixed split)
+!omicsdrp/scripts/InferenceModels/SNP+MET+CNV+RNA__attention__morgan__mixed__c94ea3/*.pt
 # claude files
 /.claude/
 /CLAUDE.md

@@ -18,4 +18,4 @@ __pycache__/
 !omicsdrp/scripts/InferenceModels/SNP+MET+CNV+RNA__attention__morgan__mixed__c94ea3/*.pt
 # claude files
 /.claude/
-/CLAUDE.md
+CLAUDE.md

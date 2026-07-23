@@ -123,6 +123,15 @@ def build(split: str = "mts") -> None:
     ic50_df = pd.read_csv(CCLE_DIR / label_file, index_col=0)
     ic50_df = ic50_df.reindex(index=cell_order, columns=drug_table["prism_name"])
     ic50 = ic50_df.values.astype(np.float32)
+    # A handful of labels (23 in HTS, 0 in MTS) are exactly float32's max
+    # magnitude (+/-3.4028235e38) -- a sentinel for "couldn't fit a
+    # dose-response curve", not a real ln(IC50). Not NaN, so they'd silently
+    # corrupt every metric (one such value dominates a mean-squared-error by
+    # itself). Treat as missing, same as NaN.
+    sentinel = np.abs(ic50) > 1e30
+    if sentinel.any():
+        print(f"[{split}] dropping {int(sentinel.sum())} sentinel (unfit-curve) labels")
+    ic50[sentinel] = np.nan
     pairs = np.argwhere(~np.isnan(ic50))
     print(f"[{split}] pairs (non-NaN IC50): {len(pairs)}")
 

@@ -71,7 +71,10 @@ class MorganFPEncoder(BaseDrugEncoder):
         fps = np.asarray(
             [[float(b) for b in str(fp).split(",")]
              for fp in drug_meta["Morgan_Fingerprint"]], dtype=np.float32)
-        self.register_buffer("fp_table", torch.from_numpy(fps))  # [n_drug, 512]
+        # non-persistent: rebuilt fresh from drug_meta at construction time, so
+        # loading a checkpoint onto a different drug set (e.g. external-data
+        # inference) doesn't hit a shape mismatch trying to restore this table.
+        self.register_buffer("fp_table", torch.from_numpy(fps), persistent=False)  # [n_drug, 512]
         self._n_drug, input_dim = fps.shape
         self.output_dim = embedding_dim
 

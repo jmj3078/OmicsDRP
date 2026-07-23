@@ -289,7 +289,13 @@ class InferenceEnsemble:
                                          ck["scaler_mean"], ck["scaler_scale"])
             gene_tensor = stack_gene_data(scaled, genes)
             model = DRPModel(genes, drug_meta, self.config).to(self.device)
-            model.load_state_dict(ck["model_state"])
+            # strict=False: checkpoints saved before fp_table/emb_table became
+            # non-persistent still carry that buffer under the old drug set's
+            # shape -- it's derived data the freshly-built model already has
+            # correctly for the new drug_meta, so an "unexpected key" here is
+            # expected and safe to ignore. A real parameter shape mismatch
+            # still raises, strict=False only tolerates missing/unexpected keys.
+            model.load_state_dict(ck["model_state"], strict=False)
             model.eval()
 
             ds = OmicsDrugDataset(gene_tensor, dummy_ic50, pairs)

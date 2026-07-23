@@ -46,7 +46,10 @@ class PretrainedEmbeddingDrugEncoder(BaseDrugEncoder):
             raise ValueError(
                 f"{emb_path}: has {table.shape[0]} rows but dataset has "
                 f"{n_drug_expected} drugs; table must be aligned to drug_idx order.")
-        self.register_buffer("emb_table", torch.from_numpy(table))  # frozen
+        # non-persistent: rebuilt fresh from drug_meta at construction time, so
+        # loading a checkpoint onto a different drug set (e.g. external-data
+        # inference) doesn't hit a shape mismatch trying to restore this table.
+        self.register_buffer("emb_table", torch.from_numpy(table), persistent=False)
         self._n_drug, input_dim = table.shape
         self.output_dim = embedding_dim
 

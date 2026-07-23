@@ -55,11 +55,25 @@ SPLIT_CONFIG = {
 
 
 def _load_drug_table(split: str) -> pd.DataFrame:
+    """MTS/HTS-filtered, col_idx-sorted subset of PRISM_drug_smiles.csv.
+
+    Keeps ``_source_row`` = each drug's row position in the FULL,
+    unfiltered 1389-row PRISM_drug_smiles.csv -- that's the row order the
+    CCLE pretrained drug embeddings (data/ccle_processed/drug_embeddings/
+    *.npy) were computed in, per their own meta.json ("row i == prism_name
+    row i in PRISM_drug_smiles.csv"), which is a different order/subset
+    than this split's drug table. omicsdrp's own PretrainedEmbeddingDrugEncoder
+    already supports remapping via a drug_meta["_source_row"] column
+    (drug_encoders.py:155-159), the same mechanism used to align GDSC's
+    241-row tables down to the 231-drug merged order.
+    """
     col_idx_field = SPLIT_CONFIG[split]["col_idx_field"]
     df = pd.read_csv(CCLE_DIR / "PRISM_drug_smiles.csv")
     sub = df[df[col_idx_field].notna()].copy()
     sub[col_idx_field] = sub[col_idx_field].astype(int)
-    return sub.sort_values(col_idx_field).reset_index(drop=True)
+    sub = sub.sort_values(col_idx_field)
+    sub["_source_row"] = sub.index
+    return sub.reset_index(drop=True)
 
 
 def _gdsc_rma_index() -> pd.Index:

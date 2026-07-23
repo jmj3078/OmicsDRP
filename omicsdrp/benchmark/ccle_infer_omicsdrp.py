@@ -40,11 +40,17 @@ def load_export(split: str):
 
 def build_drug_meta(drug_table: pd.DataFrame) -> pd.DataFrame:
     """MorganFPEncoder only reads drug_meta['Morgan_Fingerprint']; row position
-    is the drug index, matching the export's pairs[:, 1]."""
+    is the drug index, matching the export's pairs[:, 1].
+
+    ``_source_row`` is read by PretrainedEmbeddingDrugEncoder (chemberta/
+    molformer/graphormer/unimol conditions) to remap the CCLE embedding
+    tables -- computed over the full 1389-row PRISM_drug_smiles.csv -- down
+    to this split's drug order (drug_encoders.py:155-159)."""
     return pd.DataFrame({
         "DRUG_ID": drug_table["prism_name"],
         "SMILE": drug_table["smiles"],
         "Morgan_Fingerprint": drug_table["morgan_fingerprint_512"],
+        "_source_row": drug_table["_source_row"],
     })
 
 
@@ -53,20 +59,7 @@ OMICS_NAMES = ["SNP", "MET", "CNV", "RNA"]
 
 def impute_missing_channels(gene_data: dict, ensemble) -> tuple:
     """Fill any (gene, omics-channel) that is NaN for every CCLE cell.
-
-    Unlike DeepTTA/PaccMann's missing genes (some CCLE data exists elsewhere
-    for those genes, so a CCLE-cohort-mean is a real alternative), these
-    channels have literally no CCLE measurement at all -- there is no
-    cohort-mean to compute. The only available neutral value is the GDSC
-    training-set mean from the model's own saved fold scaler (averaged across
-    folds), which becomes exactly 0 once the model's standardization is
-    applied -- consistent with how the harness treats missing input elsewhere.
     """
-    # Every condition trains on its own omics subset (config.omics_indices());
-    # a channel this condition never reads (e.g. CNV for a "MET+RNA" model)
-    # is never selected out of gene_data at all (_apply_saved_scaler slices
-    # to omics_indices before scaling), so NaN there is irrelevant -- only
-    # channels actually used by at least one fold need imputing.
     used_channels = set()
     for ck in ensemble.folds:
         used_channels.update(ck["omics_indices"])
@@ -122,7 +115,8 @@ def main():
     ic50 = torch.from_numpy(np.nan_to_num(z["ic50"], nan=0.0))
 
     cond_dir = INFERENCE_MODELS_DIR / args.condition
-    ensemble = InferenceEnsemble.load(str(cond_dir), device=args.device)
+    ensemble = InferenceEnsemble.load(str(cond_dir), dataset_path=str(CCLE_DIR),
+                                      device=args.device)
     print(f"[omicsdrp] loaded {len(ensemble.folds)}-fold ensemble from {cond_dir}")
 
     gene_data, imputed = impute_missing_channels(gene_data, ensemble)

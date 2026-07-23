@@ -118,19 +118,23 @@ def main():
         per_fold_preds.append(np.concatenate(preds))
         print(f"  {fd.name} done")
 
-    pred = np.mean(np.vstack(per_fold_preds), axis=0)
+    per_fold_arr = np.vstack(per_fold_preds)
+    pred = per_fold_arr.mean(axis=0)
     metrics = regression_metrics(true, pred)
 
     out_dir = HERE / "BenchmarkResults" / "ccle_external"
     out_dir.mkdir(parents=True, exist_ok=True)
     cell_ids = meta["cell_ids"]
     tag = f"deeptta__{args.split}"
-    pd.DataFrame({
+    out_df = pd.DataFrame({
         "cell_idx": pairs[:, 0], "drug_idx": pairs[:, 1],
         "cell_id": [cell_ids[i] for i in pairs[:, 0]],
         "drug_name": [drug_table["prism_name"].iloc[i] for i in pairs[:, 1]],
         "true": true, "pred": pred,
-    }).to_parquet(out_dir / f"{tag}_predictions.parquet", index=False)
+    })
+    for fi, fold_pred in enumerate(per_fold_arr, start=1):
+        out_df[f"pred_fold{fi}"] = fold_pred
+    out_df.to_parquet(out_dir / f"{tag}_predictions.parquet", index=False)
     (out_dir / f"{tag}_metrics.json").write_text(json.dumps(metrics, indent=2))
 
     print("[deeptta] metrics:", json.dumps(metrics, indent=2))

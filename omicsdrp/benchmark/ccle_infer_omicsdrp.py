@@ -134,12 +134,15 @@ def main():
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     tag = f"omicsdrp__{args.condition}__{args.split}"
-    pd.DataFrame({
+    out_df = pd.DataFrame({
         "cell_idx": pairs[:, 0], "drug_idx": pairs[:, 1],
         "cell_id": [cell_ids[i] for i in pairs[:, 0]],
         "drug_name": [drug_table["prism_name"].iloc[i] for i in pairs[:, 1]],
         "true": result["true"], "pred": result["pred"],
-    }).to_parquet(out_dir / f"{tag}_predictions.parquet", index=False)
+    })
+    for fi, fold_pred in enumerate(result["per_fold"], start=1):
+        out_df[f"pred_fold{fi}"] = fold_pred
+    out_df.to_parquet(out_dir / f"{tag}_predictions.parquet", index=False)
     (out_dir / f"{tag}_metrics.json").write_text(json.dumps(result["metrics"], indent=2))
 
     print("[omicsdrp] metrics:", json.dumps(result["metrics"], indent=2))

@@ -51,13 +51,34 @@ def _load_mts_drug_table() -> pd.DataFrame:
 
 
 def _gdsc_rma_index() -> pd.Index:
+    """Gene-symbol index, deduplicated on symbol (keep first) -- what
+    PaccMann's adapter uses (paccmann_adapter.py dedups the pre-transpose
+    GENE_SYMBOLS index)."""
     gdsc = pd.read_csv(GDSC_RMA, sep="\t")
     gdsc = gdsc.drop(columns=["GENE_title"]).set_index("GENE_SYMBOLS")
     return gdsc[~gdsc.index.duplicated(keep="first")].index
 
 
+def _deeptta_raw_gene_columns() -> list:
+    """DeepTTA's adapter does NOT deduplicate gene symbols (only cell IDs,
+    post-transpose) -- its trained MLP input is all 17,737 raw columns,
+    including 318 blank/NaN-symbol probesets and zero real-symbol repeats
+    (verified: 17,419 unique real symbols + 318 NaN == 17,737). Reproducing
+    that exact, non-deduplicated column list/order here so the CCLE input
+    matches the trained model's dimensionality."""
+    gdsc = pd.read_csv(GDSC_RMA, sep="\t")
+    gdsc = gdsc.drop(columns=["GENE_title"]).set_index("GENE_SYMBOLS")
+    cols = [c for c in gdsc.columns if c.startswith("DATA.")]
+    expr = gdsc[cols].T
+    expr = expr[~expr.index.duplicated(keep="first")]  # dedup cell IDs only
+    # Normalise the ~318 blank/NaN gene-symbol probesets to a clean sentinel
+    # string (valid JSON, unambiguous) -- these can never match a CCLE column
+    # by name and always fall into "missing", same outcome as raw NaN would.
+    return ["<no_symbol>" if pd.isna(c) else c for c in expr.columns]
+
+
 def _deeptta_trained_gene_list() -> list:
-    return [g for g in _gdsc_rma_index() if isinstance(g, str)]
+    return _deeptta_raw_gene_columns()
 
 
 def _paccmann_trained_gene_list() -> list:

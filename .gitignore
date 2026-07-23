@@ -5,6 +5,7 @@
 *.json
 *.jsonl
 *.pt
+*.pth
 *.parquet
 # Python cache files
 __pycache__/

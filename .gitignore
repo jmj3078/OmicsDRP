@@ -15,6 +15,10 @@ __pycache__/
 
 # baseline inference model weights -- shared for downstream analysis
 # (SNP+MET+CNV+RNA, attention cell encoder, morgan drug encoder, mixed split)
+!data/PGKB_Gene_data_dict.pth
+!data/IC50_GDSC2.csv
+!data/gene_list.txt
+!data/Cell_line_meta.csv
 !omicsdrp/scripts/InferenceModels/SNP+MET+CNV+RNA__attention__morgan__mixed__c94ea3/*.pt
 # claude files
 /.claude/

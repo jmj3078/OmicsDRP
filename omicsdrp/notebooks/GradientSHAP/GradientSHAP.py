@@ -71,8 +71,6 @@ def main():
             valid_drugs[drug_name] = {'fp': target_fp, 'cell_idxs': cell_idxs}
 
     print(f'Run Gradient SHAP : {args.condition}, {len(valid_drugs)} drugs, {n_gene} genes, {n_omics} omics types, {len(ensemble.folds)} folds, {len(raw.pairs)} pairs')
-    aggregated_shaps = {name: 0 for name in valid_drugs}
-    aggregated_X = {name: 0 for name in valid_drugs}
     n_folds = len(ensemble.folds)
     for i, ck in enumerate(ensemble.folds, start=1):
         print(f"[Fold {i}/{len(ensemble.folds)}] Loading model and scaling entire gene data...")
@@ -84,8 +82,8 @@ def main():
         model.load_state_dict(ck["model_state"], strict=False)
         surrogate = FlatWrapper(model.eval(), n_gene, n_omics).to(args.device).eval()
 
-        fold_shaps = {}
-        fold_X = {}
+        fold_dir = out_dir / f"fold_{i}"
+        fold_dir.mkdir(parents=True, exist_ok=True)
         for d_i, (drug_name, d_info) in enumerate(valid_drugs.items(), start=1):
             print(f"  -> ({d_i}/{len(valid_drugs)}) Extracting SHAP for {drug_name}...")
 
@@ -94,25 +92,21 @@ def main():
             drug_fp_rep = np.tile(d_info['fp'], (N_samples, 1))
             target_gene_flat = gene_tensor[cell_idxs].numpy().reshape(N_samples, -1)
 
-            X_np = np.concatenate([drug_fp_rep, target_gene_flat], axis=1)
+            X_np = np.concatenate([drug_fp_rep, target_gene_flat], axis=1).astype(np.float32)
             X_t = torch.from_numpy(X_np).to(args.device).float()
             bg_t = X_t.clone()
 
             explainer = shap.GradientExplainer(surrogate, bg_t)
             shap_vals = explainer.shap_values(X_t)
-            current_shap = (shap_vals[0] if isinstance(shap_vals, list) else shap_vals).squeeze(-1)
-            aggregated_shaps[drug_name] += current_shap
-            aggregated_X[drug_name] += X_np
-            fold_shaps[drug_name] = current_shap.astype(np.float32)
-            fold_X[drug_name] = X_np.astype(np.float32)
+            current_shap = (shap_vals[0] if isinstance(shap_vals, list) else shap_vals).squeeze(-1).astype(np.float32)
 
-            del X_t, bg_t
+            # write per-drug results straight to their own file (accumulating in a
+            # dict for 231 drugs x 5 folds is what OOM-killed the previous run)
+            np.savez_compressed(fold_dir / f"{drug_name}.npz", shap=current_shap, X=X_np)
 
-        fold_dir = out_dir / f"fold_{i}"
-        fold_dir.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(fold_dir / f"fold_{i}_shap.npz", **fold_shaps)
-        np.savez_compressed(fold_dir / f"fold_{i}_X.npz", **fold_X)
-        print(f"\n[Fold {i}] Saved fold-level results to {fold_dir}\n")
+            del X_t, bg_t, current_shap, X_np
+
+        print(f"\n[Fold {i}] Saved per-drug results to {fold_dir}\n")
 
         del model, surrogate, scaled_genes, gene_tensor
         torch.cuda.empty_cache()
@@ -121,8 +115,13 @@ def main():
     final_shaps = {}
     final_X = {}
     for drug_name in valid_drugs:
-        final_shaps[drug_name] = (aggregated_shaps[drug_name] / n_folds).astype(np.float32)
-        final_X[drug_name] = (aggregated_X[drug_name] / n_folds).astype(np.float32)
+        shap_sum, X_sum = None, None
+        for i in range(1, n_folds + 1):
+            npz = np.load(out_dir / f"fold_{i}" / f"{drug_name}.npz")
+            shap_sum = npz["shap"] if shap_sum is None else shap_sum + npz["shap"]
+            X_sum = npz["X"] if X_sum is None else X_sum + npz["X"]
+        final_shaps[drug_name] = (shap_sum / n_folds).astype(np.float32)
+        final_X[drug_name] = (X_sum / n_folds).astype(np.float32)
 
     np.savez_compressed(out_dir / "all_drugs_ensemble_shap.npz", **final_shaps)
     np.savez_compressed(out_dir / "all_drugs_ensemble_X.npz", **final_X)

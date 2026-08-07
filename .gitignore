@@ -6,6 +6,7 @@
 *.pth
 *.smi
 *.txt
+*.npz
 # Python cache files
 __pycache__/
 *.py[cod]

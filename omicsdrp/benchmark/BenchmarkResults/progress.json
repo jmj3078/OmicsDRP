@@ -2,73 +2,25 @@
   {
     "model": "graphdrp_gcn",
     "split": "mixed",
-    "regime": "nested",
+    "regime": "ensemble",
     "status": "ok",
-    "seconds": 1991.2,
-    "summary": "5 folds | rmse=1.1661 pearson=0.9113 spearman=0.8769 r2=0.8298 n_params_total=1373039.0000"
-  },
-  {
-    "model": "graphdrp_gcn",
-    "split": "unseen_cell",
-    "regime": "nested",
-    "status": "ok",
-    "seconds": 854.4,
-    "summary": "5 folds | rmse=1.5360 pearson=0.8415 spearman=0.7792 r2=0.7048 n_params_total=1373039.0000"
-  },
-  {
-    "model": "graphdrp_gcn",
-    "split": "unseen_drug",
-    "regime": "nested",
-    "status": "ok",
-    "seconds": 373.9,
-    "summary": "5 folds | rmse=2.7567 pearson=0.3172 spearman=0.2539 r2=0.0317 n_params_total=1373039.0000"
+    "seconds": 2299.2,
+    "summary": "5 folds | rmse=1.1670 pearson=0.9113 spearman=0.8769 r2=0.8295 n_params_total=1373039.0000"
   },
   {
     "model": "graphdrp_gat",
     "split": "mixed",
-    "regime": "nested",
+    "regime": "ensemble",
     "status": "ok",
-    "seconds": 1751.5,
-    "summary": "5 folds | rmse=1.4025 pearson=0.8802 spearman=0.8404 r2=0.7527 n_params_total=1033773.0000"
-  },
-  {
-    "model": "graphdrp_gat",
-    "split": "unseen_cell",
-    "regime": "nested",
-    "status": "ok",
-    "seconds": 1547.2,
-    "summary": "5 folds | rmse=1.7144 pearson=0.8121 spearman=0.7446 r2=0.6320 n_params_total=1033773.0000"
-  },
-  {
-    "model": "graphdrp_gat",
-    "split": "unseen_drug",
-    "regime": "nested",
-    "status": "ok",
-    "seconds": 635.7,
-    "summary": "5 folds | rmse=2.6371 pearson=0.3681 spearman=0.3444 r2=0.1119 n_params_total=1033773.0000"
+    "seconds": 3049.3,
+    "summary": "5 folds | rmse=1.2424 pearson=0.9022 spearman=0.8709 r2=0.8064 n_params_total=1033773.0000"
   },
   {
     "model": "graphdrp_gat_gcn",
     "split": "mixed",
-    "regime": "nested",
+    "regime": "ensemble",
     "status": "ok",
-    "seconds": 2714.3,
-    "summary": "5 folds | rmse=1.1371 pearson=0.9156 spearman=0.8823 r2=0.8379 n_params_total=4059845.0000"
-  },
-  {
-    "model": "graphdrp_gat_gcn",
-    "split": "unseen_cell",
-    "regime": "nested",
-    "status": "ok",
-    "seconds": 1085.8,
-    "summary": "5 folds | rmse=1.5332 pearson=0.8420 spearman=0.7807 r2=0.7059 n_params_total=4059845.0000"
-  },
-  {
-    "model": "graphdrp_gat_gcn",
-    "split": "unseen_drug",
-    "regime": "nested",
-    "status": "ok",
-    "seconds": 849.8,
-    "summary": "5 folds | rmse=2.6911 pearson=0.4135 spearman=0.3692 r2=0.0750 n_params_total=4059845.0000"
+    "seconds": 3164.1,
+    "summary": "5 folds | rmse=1.1264 pearson=0.9174 spearman=0.8842 r2=0.8411 n_params_total=4059845.0000"
   }
 ]

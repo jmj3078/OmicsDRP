@@ -30,11 +30,14 @@ import common  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
-# model -> (conda env, adapter script)
+# model -> (conda env, adapter script, extra CLI args)
 MODELS = {
-    "deeptta": ("benchmark_deeptta", "adapters/deeptta_adapter.py"),
-    "graphdrp": ("benchmark_graphdrp", "adapters/graphdrp_adapter.py"),
-    "paccmann": ("benchmark_paccmann", "adapters/paccmann_adapter.py"),
+    "deeptta": ("benchmark_deeptta", "adapters/deeptta_adapter.py", []),
+    "graphdrp": ("benchmark_graphdrp", "adapters/graphdrp_adapter.py", []),
+    "graphdrp_gcn": ("benchmark_graphdrp", "adapters/graphdrp_adapter.py", ["--variant", "gcn"]),
+    "graphdrp_gat": ("benchmark_graphdrp", "adapters/graphdrp_adapter.py", ["--variant", "gat"]),
+    "graphdrp_gat_gcn": ("benchmark_graphdrp", "adapters/graphdrp_adapter.py", ["--variant", "gat_gcn"]),
+    "paccmann": ("benchmark_paccmann", "adapters/paccmann_adapter.py", []),
 }
 
 
@@ -126,11 +129,11 @@ def main() -> None:
             email_to if args.email_per != "none" else None)
 
     for i, (model, split, regime) in enumerate(jobs, 1):
-        env, script = MODELS[model]
+        env, script, extra_args = MODELS[model]
         cmd = ["conda", "run", "--no-capture-output", "-n", env,
                "python", script,
                "--split", split, "--regime", regime,
-               "--out-root", str(out_root), "--device", args.device]
+               "--out-root", str(out_root), "--device", args.device] + extra_args
         if args.epochs is not None:
             cmd += ["--epochs", str(args.epochs)]
         if args.overwrite:

@@ -34,7 +34,14 @@ UPSTREAM = common.VENDOR_DIR / "GraphDRP"
 sys.path.insert(0, str(UPSTREAM))
 
 from models.ginconv import GINConvNet  # noqa: E402
+from models.gcn import GCNNet  # noqa: E402
+from models.gat import GATNet  # noqa: E402
+from models.gat_gcn import GAT_GCN  # noqa: E402
 from preprocess import smile_to_graph  # noqa: E402
+
+# The four graph encoders from the GraphDRP paper. All share the same
+# forward(data) -> (sigmoid_out, x) signature, so only build_model() varies.
+VARIANTS = {"gin": GINConvNet, "gcn": GCNNet, "gat": GATNet, "gat_gcn": GAT_GCN}
 
 
 def _normalise(ln_ic50: float) -> float:
@@ -54,10 +61,14 @@ def _denormalise(y):
 
 
 class GraphDRPAdapter(_base.BaseAdapter):
-    name = "graphdrp"
     # upstream training.py defaults: --lr 1e-4, --train_batch 1024
     default_lr = 1e-4
     default_batch_size = 1024
+
+    def __init__(self, variant="gin"):
+        self.variant = variant
+        # "gin" keeps the original "graphdrp" folder name (already-run results).
+        self.name = "graphdrp" if variant == "gin" else f"graphdrp_{variant}"
 
     def load_native(self, export):
         feat = pd.read_csv(UPSTREAM / "data" / "PANCANCER_Genetic_feature.csv")
@@ -117,7 +128,7 @@ class GraphDRPAdapter(_base.BaseAdapter):
         return DataLoader(items, batch_size=batch_size, shuffle=shuffle)
 
     def build_model(self):
-        return GINConvNet()
+        return VARIANTS[self.variant]()
 
     def forward(self, model, batch):
         batch = batch.to(self.device)
@@ -129,4 +140,8 @@ class GraphDRPAdapter(_base.BaseAdapter):
 
 
 if __name__ == "__main__":
-    _base.run(GraphDRPAdapter())
+    import argparse
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--variant", choices=list(VARIANTS), default="gin")
+    known, remaining = pre.parse_known_args()
+    _base.run(GraphDRPAdapter(known.variant), remaining)

@@ -49,7 +49,8 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 
 from .config import ExperimentConfig
-from .data import (RawData, OmicsDrugDataset, select_omics, stack_gene_data)
+from .data import (RawData, OmicsDrugDataset, select_omics, stack_gene_data,
+                   apply_noise_omics)
 from .splits import build_folds
 from .models import DRPModel, initialize_weights
 from .engine import (set_seed, build_adamw_optimizer, train_epoch, evaluate,
@@ -125,6 +126,8 @@ def train_one_fold(raw: RawData, config: ExperimentConfig, fold: int,
     omics_gene = select_omics(raw.gene_data, config.omics_indices())
     scaled, mean_t, scale_t = _scale_with_stats(omics_gene, train_sample_indices, raw.genes)
     gene_tensor = stack_gene_data(scaled, raw.genes)
+    gene_tensor = apply_noise_omics(gene_tensor, config.omics_indices(),
+                                    config.noise_indices(), config.seed + fold)
 
     nw = config.num_workers
     train_loader = _make_loader(gene_tensor, raw.ic50, train_idx, raw.pairs,
@@ -161,6 +164,7 @@ def train_one_fold(raw: RawData, config: ExperimentConfig, fold: int,
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     return {"model_state": best_state, "scaler_mean": mean_t, "scaler_scale": scale_t,
+            "noise_seed": config.seed + fold,
             "best_epoch": best_epoch, "val_metrics": val_metrics}
 
 
@@ -195,6 +199,8 @@ def train_inference_models(raw: RawData, config: ExperimentConfig,
             "scaler_mean": res["scaler_mean"],
             "scaler_scale": res["scaler_scale"],
             "omics_indices": config.omics_indices(),
+            "noise_indices": config.noise_indices(),
+            "noise_seed": res["noise_seed"],
             "genes": list(raw.genes),
             "best_epoch": res["best_epoch"],
             "val_metrics": res["val_metrics"],
@@ -281,6 +287,10 @@ class InferenceEnsemble:
             scaled = _apply_saved_scaler(gene_data, genes, ck["omics_indices"],
                                          ck["scaler_mean"], ck["scaler_scale"])
             gene_tensor = stack_gene_data(scaled, genes)
+            # same noise ablation the model was trained with
+            gene_tensor = apply_noise_omics(gene_tensor, ck["omics_indices"],
+                                            ck.get("noise_indices", []),
+                                            ck.get("noise_seed", 0))
             model = DRPModel(genes, drug_meta, self.config).to(self.device)
             model.load_state_dict(ck["model_state"], strict=False)
             model.eval()

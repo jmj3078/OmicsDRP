@@ -3,8 +3,8 @@
 One-factor-at-a-time (OFAT) around a reference config, which is the standard way
 to attribute a performance change to a single design choice. Groups:
 
-  * ``omics``   -- omics-combination ablation (incl. the 2-modality baselines,
-                   since single-omics collapses the cell branch).
+  * ``omics``   -- omics ablation by NOISE substitution: all 15 non-empty subsets
+                   of the 4 modalities, capacity held constant (see below).
   * ``encoder`` -- attention vs. plain MLP cell encoder.
   * ``drug``    -- drug representation. The default grid compares only the
                    **frozen-representation** family (morgan baseline + the 4
@@ -25,24 +25,28 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Dict, List
 
-from .config import ExperimentConfig, DRUG_ENCODERS, DRUG_ENCODER_FAMILY
+from .config import (ExperimentConfig, DRUG_ENCODERS, DRUG_ENCODER_FAMILY,
+                     OMICS_ORDER)
 
 # Fair drug-representation ablation = frozen-representation encoders only
 # (baseline morgan + pretrained). GNNs are excluded (end-to-end, not comparable).
 ABLATION_DRUG_ENCODERS = [d for d in DRUG_ENCODERS
                           if DRUG_ENCODER_FAMILY[d] != "scratch_graph"]
 
-# Feature ablation = RNA-anchored build-up. RNA (the transcriptomic backbone) is
-# always present so the cell branch never collapses to a single modality; we add
-# one, then two, then all other modalities to read off each one's marginal value.
-FEATURE_OMICS_SETS = [
-    ["RNA", "SNP"],                  # RNA + one
-    ["RNA", "MET"],
-    ["RNA", "CNV"],
-    ["RNA", "SNP", "MET"],           # RNA + two
-    ["RNA", "SNP", "CNV"],
-    ["RNA", "MET", "CNV"],
-    ["RNA", "SNP", "MET", "CNV"],    # all (== baseline reference)
+# Feature ablation = NOISE substitution, not modality removal. Every condition
+# keeps all 4 omics columns (identical input_dim / parameter count) and replaces
+# the ablated modalities' scaled values with N(0,1) noise. Two reasons this beats
+# dropping columns: (a) network capacity is held constant, so a metric drop is
+# attributable to lost information rather than to a smaller model; (b) single
+# modality ablations become possible (dropping to one column collapsed the cell
+# branch). Hence the full power set: all 15 non-empty noise subsets of the 4
+# modalities (noise=none is the intact baseline == the reference config).
+FEATURE_NOISE_SETS = [[o] for o in OMICS_ORDER] + [
+    ["SNP", "MET"], ["SNP", "CNV"], ["SNP", "RNA"],
+    ["MET", "CNV"], ["MET", "RNA"], ["CNV", "RNA"],
+    ["SNP", "MET", "CNV"], ["SNP", "MET", "RNA"],
+    ["SNP", "CNV", "RNA"], ["MET", "CNV", "RNA"],
+    ["SNP", "MET", "CNV", "RNA"],    # all-noise control (no real omics at all)
 ]
 
 
@@ -66,8 +70,8 @@ def build_grid(groups: List[str] = None, **base_overrides) -> List[ExperimentCon
     grid[ref.tag()] = replace(ref, name="ref")
 
     if "omics" in groups:
-        for omics in FEATURE_OMICS_SETS:
-            c = replace(ref, name="omics", omics=omics)
+        for noise in FEATURE_NOISE_SETS:
+            c = replace(ref, name="omics", noise_omics=noise)
             grid[c.tag()] = c
 
     if "encoder" in groups:

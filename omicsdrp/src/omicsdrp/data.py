@@ -155,6 +155,29 @@ def stack_gene_data(gene_data: Dict[str, torch.Tensor],
     return torch.stack([gene_data[g] for g in genes], dim=1).contiguous()
 
 
+def apply_noise_omics(gene_tensor: torch.Tensor,
+                      omics_indices: Sequence[int],
+                      noise_indices: Sequence[int],
+                      seed: int) -> torch.Tensor:
+    """Replace the chosen modality columns of a stacked ``[N_cell, n_gene, n_omics]``
+    tensor with i.i.d. N(0, 1) noise.
+
+    Called AFTER ``scale_gene_data`` so the noise matches the scale of the real
+    (standardised) features -- the only thing removed is the information, not the
+    input dimensionality or the parameter count. Deterministic given ``seed``
+    (pass ``config.seed + fold`` so a fold is reproducible on resume).
+    """
+    noise_indices = list(noise_indices)
+    if not noise_indices:
+        return gene_tensor
+    pos = [list(omics_indices).index(i) for i in noise_indices]
+    g = torch.Generator().manual_seed(int(seed))
+    out = gene_tensor.clone()
+    for p in pos:
+        out[:, :, p] = torch.randn(out.shape[0], out.shape[1], generator=g)
+    return out.contiguous()
+
+
 class OmicsDrugDataset(Dataset):
     """Yields (gene_features[n_gene, n_omics], drug_idx, ic50, (sample_idx, drug_idx)).
 

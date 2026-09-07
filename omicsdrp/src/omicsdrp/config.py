@@ -67,6 +67,15 @@ class ExperimentConfig:
     # meaningful baselines are 2-modality, e.g. ["RNA", "MET"] or ["RNA", "CNV"].
     omics: List[str] = field(default_factory=lambda: ["SNP", "MET", "CNV", "RNA"])
 
+    # --- ablation axis 1b: noise ablation ---
+    # Modalities whose (already-scaled) columns are REPLACED by N(0,1) noise
+    # instead of being dropped. Keeps input_dim / parameter count identical to
+    # the full model, so a drop in performance is attributable to the lost
+    # information rather than to a smaller network -- and lets a *single*
+    # modality be ablated (dropping down to one column collapses the branch).
+    # Must be a subset of ``omics``; empty == no noise (the intact baseline).
+    noise_omics: List[str] = field(default_factory=list)
+
     # --- ablation axis 2: cell encoder ---
     cell_encoder: str = "attention"          # one of CELL_ENCODERS
 
@@ -109,6 +118,13 @@ class ExperimentConfig:
     def omics_indices(self) -> List[int]:
         return omics_to_indices(self.omics)
 
+    def noise_indices(self) -> List[int]:
+        """Column indices (canonical OMICS_ORDER) to fill with noise."""
+        extra = [o for o in self.noise_omics if o not in self.omics]
+        if extra:
+            raise ValueError(f"noise_omics {extra} not in omics {self.omics}")
+        return omics_to_indices(self.noise_omics)
+
     @property
     def n_omics(self) -> int:
         return len(self.omics)
@@ -123,11 +139,15 @@ class ExperimentConfig:
         everywhere via the resume/cache path -- no duplicate training.
         """
         omics_tag = "+".join(o for o in OMICS_ORDER if o in self.omics)
+        noise_tag = "+".join(o for o in OMICS_ORDER if o in self.noise_omics)
+        if noise_tag:
+            omics_tag += f"__noise-{noise_tag}"
         base = f"{omics_tag}__{self.cell_encoder}__{self.drug_encoder}__{self.split_mode}"
         ident = {k: v for k, v in asdict(self).items() if k not in ("name", "out_root")}
         # canonicalise omics so list ORDER doesn't change identity (["RNA","SNP"]
         # and ["SNP","RNA"] are the same model -> same tag -> trained once).
         ident["omics"] = self.omics_indices()
+        ident["noise_omics"] = self.noise_indices()
         h = hashlib.md5(json.dumps(ident, sort_keys=True).encode()).hexdigest()[:6]
         return f"{base}__{h}"
 

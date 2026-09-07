@@ -2,7 +2,7 @@
 
 Order (as requested):
     0. BASELINE   -- nested-CV baseline: ECFP2/Morgan drug + Attention cell + all omics
-    1. FEATURE    -- omics-combination ablation (RNA-anchored build-up)
+    1. FEATURE    -- omics ablation by noise substitution (all 15 subsets)
     2. ATTENTION  -- cell encoder: attention vs. MLP
     3. DRUG       -- drug representation: Morgan + 4 frozen pretrained
 
@@ -26,7 +26,7 @@ from dataclasses import replace
 from typing import Dict, List, Optional
 
 from .config import ExperimentConfig, OMICS_ORDER
-from .ablations import reference_config, FEATURE_OMICS_SETS, ABLATION_DRUG_ENCODERS
+from .ablations import reference_config, FEATURE_NOISE_SETS, ABLATION_DRUG_ENCODERS
 from .experiment import run_experiment
 from .notify import send_email
 
@@ -40,7 +40,8 @@ def _omics_label(omics) -> str:
 
 def config_label(c: ExperimentConfig) -> str:
     # use "·" (not "|") so the label is safe inside a markdown table cell
-    return f"omics={_omics_label(c.omics)} · cell={c.cell_encoder} · drug={c.drug_encoder} · split={c.split_mode}"
+    noise = _omics_label(c.noise_omics) or "none"
+    return f"omics={_omics_label(c.omics)} · noise={noise} · cell={c.cell_encoder} · drug={c.drug_encoder} · split={c.split_mode}"
 
 
 def build_stage1_stages(**overrides):
@@ -51,7 +52,7 @@ def build_stage1_stages(**overrides):
     ref = reference_config(name="s1", **overrides)  # all omics, attention, morgan, mixed
     raw_stages: "OrderedDict[str, List[ExperimentConfig]]" = OrderedDict()
     raw_stages["0_baseline"] = [ref]
-    raw_stages["1_feature"] = [replace(ref, omics=o) for o in FEATURE_OMICS_SETS]
+    raw_stages["1_feature"] = [replace(ref, noise_omics=n) for n in FEATURE_NOISE_SETS]
     raw_stages["2_attention"] = [replace(ref, cell_encoder=e) for e in ("attention", "mlp")]
     raw_stages["3_drug"] = [replace(ref, drug_encoder=d) for d in ABLATION_DRUG_ENCODERS]
 

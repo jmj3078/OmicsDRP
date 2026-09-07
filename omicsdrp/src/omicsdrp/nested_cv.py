@@ -33,6 +33,7 @@ def _free_gpu() -> None:
 
 from .config import ExperimentConfig
 from .data import (RawData, select_omics, scale_gene_data, stack_gene_data,
+                   apply_noise_omics,
                    OmicsDrugDataset)
 from .splits import FoldSpec, build_folds
 from .models import DRPModel, initialize_weights, count_parameters
@@ -60,6 +61,9 @@ def run_fold(raw: RawData, config: ExperimentConfig, fold: FoldSpec,
     # stack the per-gene dict into one [N_cell, n_gene, n_omics] tensor ONCE, so the
     # DataLoader returns a cheap slice (not a 909-key dict) per sample.
     gene_tensor = stack_gene_data(gene_scaled, raw.genes)
+    # noise ablation (no-op unless config.noise_omics is set)
+    gene_tensor = apply_noise_omics(gene_tensor, config.omics_indices(),
+                                    config.noise_indices(), config.seed + fold.fold)
 
     nw = config.num_workers
     # drop_last on TRAIN only: the drug-embedding & response-head BatchNorm1d still

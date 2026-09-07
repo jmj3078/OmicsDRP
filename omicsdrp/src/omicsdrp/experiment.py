@@ -44,7 +44,7 @@ def run_experiment(config: ExperimentConfig, raw=None, device: str = None,
 
     if raw is None:
         raw = load_raw(config.dataset_path)
-    print(f"[run ] {tag}  (omics={config.omics}, cell={config.cell_encoder}, "
+    print(f"[run ] {tag}  (omics={config.omics}, noise={config.noise_omics or None}, cell={config.cell_encoder}, "
           f"drug={config.drug_encoder}, split={config.split_mode})")
     summary = run_nested_cv(raw, config, recorder, device)
     summary["status"] = "done"

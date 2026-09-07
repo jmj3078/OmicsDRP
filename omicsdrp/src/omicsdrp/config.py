@@ -82,6 +82,14 @@ class ExperimentConfig:
     # --- ablation axis 3: drug representation ---
     drug_encoder: str = "morgan"             # one of DRUG_ENCODERS
 
+    # --- control axis: which 909 genes feed the cell branch ---
+    # "pgkb"        -- the curated 909 pharmacogenes (the paper's gene set)
+    # "random:<s>"  -- 909 genes sampled (seed <s>) from the NaN-free, non-
+    #                  degenerate all-gene pool EXCLUDING the PGKB genes; a
+    #                  size-matched negative control that keeps the architecture
+    #                  and parameter count identical. See data.build_gene_dict.
+    gene_set: str = "pgkb"
+
     # --- ablation axis 4: split regime ---
     split_mode: str = "mixed"                # one of SPLIT_MODES
     # For unseen splits: number of clusters used to stratify groups across folds
@@ -142,12 +150,22 @@ class ExperimentConfig:
         noise_tag = "+".join(o for o in OMICS_ORDER if o in self.noise_omics)
         if noise_tag:
             omics_tag += f"__noise-{noise_tag}"
+        if self.gene_set != "pgkb":
+            omics_tag = f"{self.gene_set.replace(':', '')}__{omics_tag}"
         base = f"{omics_tag}__{self.cell_encoder}__{self.drug_encoder}__{self.split_mode}"
         ident = {k: v for k, v in asdict(self).items() if k not in ("name", "out_root")}
         # canonicalise omics so list ORDER doesn't change identity (["RNA","SNP"]
         # and ["SNP","RNA"] are the same model -> same tag -> trained once).
         ident["omics"] = self.omics_indices()
-        ident["noise_omics"] = self.noise_indices()
+        # keep the hash backward-compatible: a NEUTRAL new field is dropped from
+        # the identity so previously-trained experiments still resolve to their
+        # original tag (and are reused via resume) instead of retraining.
+        if self.noise_omics:
+            ident["noise_omics"] = self.noise_indices()
+        else:
+            ident.pop("noise_omics", None)
+        if self.gene_set == "pgkb":
+            ident.pop("gene_set", None)
         h = hashlib.md5(json.dumps(ident, sort_keys=True).encode()).hexdigest()[:6]
         return f"{base}__{h}"
 

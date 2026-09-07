@@ -12,6 +12,7 @@ matrix) and exposes helpers to:
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Dict, List, Sequence
 
@@ -20,6 +21,8 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
+
+from .config import OMICS_ORDER
 
 
 @dataclass
@@ -96,8 +99,90 @@ def merge_duplicate_drugs(ic50_df: pd.DataFrame, drug_meta: pd.DataFrame):
     return merged_ic50_df, merged_drug_meta
 
 
-def load_raw(dataset_path: str, merge_duplicates: bool = True) -> RawData:
-    gene_data = torch.load(f"{dataset_path}/PGKB_Gene_data_dict.pth")
+# --------------------------------------------------------------------------- #
+# gene-set control: 909 random genes instead of the 909 curated pharmacogenes
+# --------------------------------------------------------------------------- #
+ALLGENE_FILES = {"SNP": "SNP_Gene_Level_count.csv", "MET": "MET_Gene_Level_mean.csv",
+                 "CNV": "CNV.csv", "RNA": "RNA.csv"}   # column order = OMICS_ORDER
+
+
+def build_gene_dict(dataset_path: str, seed: int, n_genes: int = 909
+                    ) -> Dict[str, torch.Tensor]:
+    """Size-matched RANDOM gene set, in the same format as ``PGKB_Gene_data_dict.pth``.
+
+    Sampling pool = genes present in all four ``raw_data_allgene`` matrices with
+    **no missing values** and non-zero variance, EXCLUDING the 909 PGKB genes
+    (15,072 usable genes, of which 14,193 are non-PGKB). Restricting to complete
+    genes matters: sampling from the union would hand the control set constant
+    imputed columns, so it would lose for being missing rather than for being
+    uninformative.
+
+    The ``raw_data_allgene`` matrices are already on the exact scale used by the
+    PGKB dict (873 GDSC2 cell lines, same row order, RNA already log-scaled), so
+    no transform is applied -- only the column pick.
+
+    Cached at ``<dataset_path>/gene_dicts/random_<seed>.pth`` (+ ``.genes.txt``)
+    because building it parses ~900 MB of CSV.
+    """
+    cache_dir = os.path.join(dataset_path, "gene_dicts")
+    cache = os.path.join(cache_dir, f"random_{seed}.pth")
+    if os.path.isfile(cache):
+        return torch.load(cache)
+
+    src = os.path.join(dataset_path, "raw_data_allgene")
+    heads = {}
+    for k, f in ALLGENE_FILES.items():
+        with open(os.path.join(src, f)) as fh:
+            cols = fh.readline().rstrip("\n").split(",")
+        heads[k] = [c for c in cols if c]          # RNA has a leading index col
+    pool = set.intersection(*(set(v) for v in heads.values()))
+    pgkb = set(pd.read_csv(os.path.join(dataset_path, "gene_list.txt"),
+                           header=None)[0])
+    cand = sorted(pool - pgkb)
+
+    mats = {}
+    for k, f in ALLGENE_FILES.items():
+        d = pd.read_csv(os.path.join(src, f), usecols=cand, low_memory=False)
+        mats[k] = d.loc[:, ~d.columns.duplicated()].reindex(columns=cand).astype("float32")
+    ok = np.ones(len(cand), dtype=bool)
+    for k in ALLGENE_FILES:
+        v = mats[k].values
+        ok &= ~np.isnan(v).any(axis=0)             # complete
+        ok &= np.nanstd(v, axis=0) > 1e-6          # non-degenerate
+    usable = [g for g, f in zip(cand, ok) if f]
+    if len(usable) < n_genes:
+        raise ValueError(f"only {len(usable)} usable genes in pool")
+
+    rng = np.random.default_rng(seed)
+    picked = sorted(rng.choice(len(usable), n_genes, replace=False))
+    picked = [usable[i] for i in picked]
+    cols = {k: mats[k][picked].values for k in ALLGENE_FILES}
+    gene_data = {g: torch.from_numpy(
+        np.column_stack([cols[k][:, i] for k in OMICS_ORDER])).float()
+        for i, g in enumerate(picked)}
+
+    os.makedirs(cache_dir, exist_ok=True)
+    torch.save(gene_data, cache)
+    with open(cache + ".genes.txt", "w") as fh:
+        fh.write("\n".join(picked) + "\n")
+    print(f"[gene_set] random:{seed} -> {len(picked)} genes "
+          f"(pool {len(usable)}), cached at {cache}")
+    return gene_data
+
+
+def load_gene_data(dataset_path: str, gene_set: str = "pgkb"
+                   ) -> Dict[str, torch.Tensor]:
+    """Dispatch ``ExperimentConfig.gene_set`` to a gene -> [873, 4] dict."""
+    if gene_set == "pgkb":
+        return torch.load(f"{dataset_path}/PGKB_Gene_data_dict.pth")
+    if gene_set.startswith("random:"):
+        return build_gene_dict(dataset_path, int(gene_set.split(":", 1)[1]))
+    raise ValueError(f"unknown gene_set {gene_set!r}")
+
+
+def load_raw(dataset_path: str, merge_duplicates: bool = True,
+             gene_set: str = "pgkb") -> RawData:
+    gene_data = load_gene_data(dataset_path, gene_set)
     genes = list(gene_data.keys())
 
     ic50_df = pd.read_csv(f"{dataset_path}/IC50_GDSC2.csv", index_col=0)

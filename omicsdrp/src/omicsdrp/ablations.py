@@ -50,6 +50,19 @@ FEATURE_NOISE_SETS = [[o] for o in OMICS_ORDER] + [
 ]
 
 
+# The ORIGINAL drop-style ablation (column removed, not noised) was RNA-anchored,
+# so the RNA-less corner of the lattice was never tested -- exactly the corner
+# that asks "is RNA the only modality that matters?". These 4 subsets complete
+# it: together with the 7 already-run RNA-anchored sets, all 11 subsets of size
+# >= 2 exist. Size-1 sets stay out (a single column collapses the cell branch).
+# NOTE: dropping columns shrinks input_dim/parameters -- that confound is why the
+# main ablation uses noise substitution; these runs are a cross-check, and each
+# has a capacity-matched twin in the noise ladder (e.g. drop RNA <-> noise=RNA).
+DROP_OMICS_SETS_NO_RNA = [
+    ["SNP", "MET"], ["SNP", "CNV"], ["MET", "CNV"], ["SNP", "MET", "CNV"],
+]
+
+
 def reference_config(**overrides) -> ExperimentConfig:
     base = ExperimentConfig(
         name="ref",

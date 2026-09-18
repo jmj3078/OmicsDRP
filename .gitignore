@@ -14,13 +14,14 @@ __pycache__/
 # benchmarking sources (heavy data)
 /BenchSources/*
 
-# baseline inference model weights -- shared for downstream analysis
-# (SNP+MET+CNV+RNA, attention cell encoder, morgan drug encoder, mixed split)
+# inference model weights -- shared for downstream analysis
+# (SNP+MET+CNV+RNA, attention cell encoder, morgan / molformer drug encoder, mixed split)
 !data/PGKB_Gene_data_dict.pth
 !data/IC50_GDSC2.csv
 !data/gene_list.txt
 !data/Cell_line_meta.csv
 !omicsdrp/scripts/InferenceModels/SNP+MET+CNV+RNA__attention__morgan__mixed__c94ea3/*.pt
+!omicsdrp/scripts/InferenceModels/SNP+MET+CNV+RNA__attention__molformer__mixed__6548ee/*.pt
 # claude files
 /.claude/
 CLAUDE.md

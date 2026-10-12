@@ -30,6 +30,10 @@ def parse_args():
     p.add_argument("--split_mode", default="mixed",
                    choices=["mixed", "unseen_cell", "unseen_drug"],
                    help="split regime the whole ladder runs under")
+    p.add_argument("--drug_encoder", default="morgan",
+                   help="reference drug encoder the whole ladder runs with")
+    p.add_argument("--stages", nargs="*", default=None,
+                   help="run only these stages, e.g. 0_baseline 1_feature (default: all)")
     p.add_argument("--email-to", default=os.environ.get("EMAIL_TO"),
                    help="recipient for mailx notifications (or set EMAIL_TO)")
     p.add_argument("--email-per", default="stage",
@@ -42,12 +46,14 @@ def parse_args():
 def main():
     args = parse_args()
     overrides = dict(dataset_path=args.dataset_path, out_root=args.out_root,
-                     split_mode=args.split_mode)
+                     split_mode=args.split_mode, drug_encoder=args.drug_encoder)
     if args.smoke:
         overrides.update(num_epochs=2, outer_folds=2, patience=2,
                          n_cluster_cell=6, n_cluster_drug=6)
 
     ref, stages, baseline_tag = build_stage1_stages(**overrides)
+    if args.stages:
+        stages = type(stages)((k, v) for k, v in stages.items() if k in args.stages)
     email_to = None if args.email_per == "none" else args.email_to
 
     raw = load_raw(args.dataset_path)

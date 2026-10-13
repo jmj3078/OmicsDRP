@@ -25,3 +25,5 @@ __pycache__/
 # claude files
 /.claude/
 CLAUDE.md
+# notebook summary tables -- shared
+!omicsdrp/notebooks/outputs/*.csv

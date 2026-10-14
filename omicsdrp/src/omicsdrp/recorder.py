@@ -104,11 +104,7 @@ class ExperimentRecorder:
 
     def save_predictions(self, fold: int, df: pd.DataFrame) -> None:
         path = os.path.join(self.folds_dir, f"fold_{fold}_predictions.parquet")
-        try:
-            df.to_parquet(path)
-        except Exception:
-            path = path.replace(".parquet", ".pkl")
-            df.to_pickle(path)
+        df.to_parquet(path)  # needs pyarrow; no silent .pkl fallback
         self.event("predictions_saved", fold=fold, path=path, n=len(df))
 
     def save_embeddings(self, fold: int, embeddings: Dict[str, Any]) -> None:

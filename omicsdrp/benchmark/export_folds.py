@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import pickle
 import sys
 from pathlib import Path
 
@@ -107,11 +106,13 @@ def _reference_test_pairs(split_mode: str, n_folds: int):
     folds_dir = matches[0] / "folds"
     ref = {}
     for k in range(1, n_folds + 1):
-        p = folds_dir / f"fold_{k}_predictions.pkl"
-        if not p.exists():
+        p = folds_dir / f"fold_{k}_predictions.parquet"
+        if p.exists():
+            df = pd.read_parquet(p)
+        elif p.with_suffix(".pkl").exists():  # legacy runs saved without pyarrow
+            df = pd.read_pickle(p.with_suffix(".pkl"))
+        else:
             return None
-        with open(p, "rb") as fh:
-            df = pickle.load(fh)
         ref[k] = set(zip(df["sample_idx"].astype(int), df["drug_idx"].astype(int)))
     return matches[0].name, ref
 

@@ -16,7 +16,7 @@ Pipeline: raw omics -> per-fold z-score with the scaler saved in each fold
 checkpoint (GDSC training statistics) -> fold model -> mean over 5 folds.
 
 Usage:
-    python predict.py --input example/depmap_prism_mts --out depmap_predictions.csv
+    python predict.py --input example/depmap_prism_mts --out depmap_predictions.parquet
 """
 import argparse
 import json
@@ -36,7 +36,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", default=os.path.join(HERE, "example", "depmap_prism_mts"))
     ap.add_argument("--weights", default=os.path.join(HERE, "weights"))
-    ap.add_argument("--out", default="predictions.csv")
+    ap.add_argument("--out", default="predictions.parquet")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = ap.parse_args()
 
@@ -71,7 +71,7 @@ def main():
     if ic50 is not None:
         out["true_ln_ic50"] = res["true"]
         print("metrics:", json.dumps(res["metrics"], indent=2))
-    out.to_csv(args.out, index=False)
+    out.to_parquet(args.out, index=False)
     print(f"saved {len(out)} predictions -> {args.out}")
 
 

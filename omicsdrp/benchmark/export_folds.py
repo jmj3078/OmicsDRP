@@ -107,12 +107,9 @@ def _reference_test_pairs(split_mode: str, n_folds: int):
     ref = {}
     for k in range(1, n_folds + 1):
         p = folds_dir / f"fold_{k}_predictions.parquet"
-        if p.exists():
-            df = pd.read_parquet(p)
-        elif p.with_suffix(".pkl").exists():  # legacy runs saved without pyarrow
-            df = pd.read_pickle(p.with_suffix(".pkl"))
-        else:
+        if not p.exists():
             return None
+        df = pd.read_parquet(p)
         ref[k] = set(zip(df["sample_idx"].astype(int), df["drug_idx"].astype(int)))
     return matches[0].name, ref
 

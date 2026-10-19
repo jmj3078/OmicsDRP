@@ -40,7 +40,7 @@ The final OmicsDRP framework uses all four omics (SNP, MET, CNV, RNA), the atten
 ###### Example: external validation on DepMap (CCLE omics + PRISM-MTS response)
 ```text
 cd OmicsDRP_final
-python predict.py --input example/depmap_prism_mts --out depmap_predictions.csv
+python predict.py --input example/depmap_prism_mts --out depmap_predictions.parquet
 ```
 The example contains 666 DepMap cell lines × 172 PRISM drugs (39,433 measured pairs) and reproduces the reported external result (Pearson 0.546, Spearman 0.455).
 
